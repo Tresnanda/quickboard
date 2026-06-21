@@ -172,6 +172,19 @@ impl Store {
         String::from_utf8(pt).map_err(|e| e.to_string())
     }
 
+    /// Whether an item is flagged confidential — a cheap metadata lookup used to
+    /// decide if a Touch ID gate is required before decrypting / releasing it.
+    pub fn is_confidential(&self, id: &str) -> Result<bool, String> {
+        self.conn
+            .query_row(
+                "SELECT confidential FROM items WHERE id=?1",
+                [id],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|v| v != 0)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn list_categories(&self) -> Result<Vec<String>, String> {
         let mut stmt = self.conn.prepare("SELECT DISTINCT category FROM items ORDER BY category").map_err(|e| e.to_string())?;
         let rows = stmt.query_map([], |r| r.get::<_,String>(0)).map_err(|e| e.to_string())?;

@@ -1,10 +1,11 @@
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
-import { useReducedMotion } from "framer-motion";
-import { FileText, KeyRound, Lock } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Eye, EyeOff, FileText, KeyRound, Lock } from "lucide-react";
 import { fileToTemp } from "../lib/ipc";
 import { categoryTile } from "../lib/category-color";
 import { useCopy } from "../lib/use-copy";
 import { usePreview } from "../lib/use-preview";
+import { useReveal } from "../lib/use-reveal";
 import { CopyMorph } from "./CopyMorph";
 import { ConfidentialFrost } from "./Generative";
 import { DitherArt } from "./DitherArt";
@@ -30,6 +31,8 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
   const reduce = useReducedMotion();
   const { copied, copy } = useCopy(item.id);
   const { preview, confidential } = usePreview(item);
+  const { revealed, value: revealedValue, busy: revealing, toggle: toggleReveal } =
+    useReveal(item.id);
 
   const isText = item.kind === "Text";
   const tile = categoryTile(item.category, item.confidential);
@@ -104,7 +107,28 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
           {item.label}
         </div>
         {confidential ? (
-          <ConfidentialFrost width={110} />
+          revealed ? (
+            <motion.div
+              initial={reduce ? false : { opacity: 0, filter: "blur(6px)" }}
+              animate={{ opacity: 1, filter: "blur(0px)" }}
+              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              className="tabular"
+              style={{
+                fontSize: "0.75rem",
+                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                color: "var(--text)",
+                marginTop: "2px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                letterSpacing: "0.02em",
+              }}
+            >
+              {revealedValue}
+            </motion.div>
+          ) : (
+            <ConfidentialFrost width={110} />
+          )
         ) : (
           <div
             className={preview ? "tabular" : undefined}
@@ -136,6 +160,19 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
           flexShrink: 0,
         }}
       >
+        {confidential && isText && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void toggleReveal()}
+            disabled={revealing}
+            aria-label={revealed ? "Hide value" : "Reveal value with Touch ID"}
+            className="qb-press h-auto rounded-lg px-2 py-1.5 text-[var(--text)]"
+          >
+            {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+          </Button>
+        )}
         {isText ? (
           <Button
             type="button"

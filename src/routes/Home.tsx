@@ -8,6 +8,8 @@ import {
 } from "framer-motion";
 import {
   ChevronDown,
+  Eye,
+  EyeOff,
   FileText,
   Inbox,
   KeyRound,
@@ -20,6 +22,7 @@ import { categoryColor, categoryTile } from "../lib/category-color";
 import { fileToTemp } from "../lib/ipc";
 import { useCopy } from "../lib/use-copy";
 import { usePreview } from "../lib/use-preview";
+import { useReveal } from "../lib/use-reveal";
 import { CopyMorph } from "../components/CopyMorph";
 import { ConfidentialFrost } from "../components/Generative";
 import { ItemMenu } from "../components/ItemMenu";
@@ -894,6 +897,8 @@ function BentoHero({
   const { copied, copy } = useCopy(item.id);
   const { preview, confidential } = usePreview(item);
   const isText = item.kind === "Text";
+  const { revealed, value: revealedValue, busy: revealing, toggle: toggleReveal } =
+    useReveal(item.id);
 
   async function handleDragStart(event: React.DragEvent) {
     event.preventDefault();
@@ -963,7 +968,27 @@ function BentoHero({
         </div>
         {confidential ? (
           <div style={{ marginTop: "4px" }}>
-            <ConfidentialFrost width={150} />
+            {revealed ? (
+              <motion.div
+                initial={reduce ? false : { opacity: 0, filter: "blur(6px)" }}
+                animate={{ opacity: 1, filter: "blur(0px)" }}
+                transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+                className="tabular"
+                style={{
+                  fontSize: "0.8125rem",
+                  fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                  color: "var(--text)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {revealedValue}
+              </motion.div>
+            ) : (
+              <ConfidentialFrost width={150} />
+            )}
           </div>
         ) : (
           <div
@@ -988,13 +1013,28 @@ function BentoHero({
 
       <div style={{ marginTop: "auto", paddingTop: "0.7rem" }}>
         {isText ? (
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className={cn("qb-glass-btn", copied && "text-[var(--green)]")}
-          >
-            <CopyMorph copied={copied} reduce={reduce} />
-          </button>
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            {confidential && (
+              <button
+                type="button"
+                onClick={() => void toggleReveal()}
+                disabled={revealing}
+                aria-label={revealed ? "Hide value" : "Reveal value with Touch ID"}
+                className="qb-glass-btn"
+                style={{ flex: "0 0 auto", paddingLeft: "0.9rem", paddingRight: "0.9rem" }}
+              >
+                {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className={cn("qb-glass-btn", copied && "text-[var(--green)]")}
+              style={{ flex: 1 }}
+            >
+              <CopyMorph copied={copied} reduce={reduce} />
+            </button>
+          </div>
         ) : (
           <button
             type="button"

@@ -1,8 +1,8 @@
-// SPIKE: throwaway, removed/replaced in Plan 2.
+// The Confidential biometric gate (R3). Began as a feasibility spike; now the
+// live path that gates decrypt / release of confidential items behind Touch ID.
 //
-// Feasibility spike for Task 3: prove that the Rust backend can trigger a
-// Touch ID prompt that works under an UNSIGNED `tauri dev` binary, with NO
-// keychain entitlement and NO code-signing.
+// It proves the Rust backend can trigger a Touch ID prompt that works under an
+// UNSIGNED `tauri dev` binary, with NO keychain entitlement and NO code-signing.
 //
 // WHY THIS APPROACH (Path A — LocalAuthentication / LAContext):
 //   The previous approach stored a biometric-gated item in the macOS keychain
@@ -36,8 +36,8 @@ use robius_authentication::{
 /// on cancel or any failure. Requires NO keychain entitlement and NO
 /// code-signing, so it works under unsigned `tauri dev`.
 ///
-/// Retained for Plan 3 confidential gate.
-#[allow(dead_code)] // retained for Plan 3 confidential gate
+/// The live Confidential gate: callers require a successful return before
+/// decrypting or releasing a confidential item.
 #[cfg(target_os = "macos")]
 pub fn biometric_roundtrip() -> Result<bool, String> {
     // Build a policy that requests biometrics (Touch ID). We also allow the
@@ -77,7 +77,6 @@ pub fn biometric_roundtrip() -> Result<bool, String> {
 
 /// Non-macOS fallback so the crate still compiles on other targets.
 /// macOS-only; elsewhere it is simply unsupported.
-#[allow(dead_code)] // retained for Plan 3 confidential gate
 #[cfg(not(target_os = "macos"))]
 pub fn biometric_roundtrip() -> Result<bool, String> {
     Err("biometric spike is only supported on macOS".to_string())
