@@ -3,17 +3,61 @@
 @tailwind utilities;
 
 :root {
-  --qb-bg: #ffffff;
-  --qb-sidebar: #fcfcfb;
-  --qb-border: #eeece8;
-  --qb-hair: #f3f2ef;
-  --qb-ink: #191917;
-  --qb-muted: #8c8a84;
-  --qb-muted2: #aeaca6;
-  --qb-amber: #d4842e;
-  --qb-green: #3a9d4e;
-  --qb-blue: #3b6fd4;
-  --qb-purple: #9159c9;
+  /* ── Redesign tokens (Plan 3): dark sidebar + bright layered content ──
+     High contrast, real depth, tasteful color. See
+     docs/superpowers/specs/2026-06-21-quickboard-redesign.md */
+
+  /* surfaces */
+  --bg: #f4f4f5; /* content canvas (cards pop on it) */
+  --card: #ffffff;
+  --side-bg: #17171a; /* dark sidebar */
+  --side-elev: #1f1f23;
+
+  /* text — HIGH CONTRAST (the core fix) */
+  --ink: #0b0b0c; /* headings — near black */
+  --text: #3f3f46; /* body */
+  --muted: #71717a; /* secondary, use sparingly */
+  --faint: #a1a1aa;
+  --side-fg: #fafafa;
+  --side-muted: #a1a1aa;
+
+  /* lines + depth */
+  --border: #e6e6e4;
+  --hair: #efefed;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 28px -12px rgba(0, 0, 0, 0.14);
+  --shadow-pop: 0 10px 34px rgba(0, 0, 0, 0.16);
+
+  /* accent + semantic + category palette */
+  --accent: #4f46e5; /* primary (active, primary buttons) */
+  --green: #16a34a;
+  --amber: #d97706;
+  --blue: #3b82f6;
+  --violet: #7c3aed;
+  --rose: #e11d48;
+  --cyan: #0891b2;
+
+  /* radii */
+  --r-card: 16px;
+  --r-tile: 10px;
+  --r-pill: 8px;
+
+  /* ── Legacy --qb-* aliases, remapped to the new HIGH-CONTRAST values ──
+     so existing components (Home / ItemRow / Settings / Dialog) inherit
+     readable contrast immediately, before their R2+ rebuild. */
+  --qb-bg: var(--bg); /* content canvas (was #ffffff) */
+  --qb-card: var(--card);
+  --qb-sidebar: var(--side-bg);
+  --qb-border: var(--border);
+  --qb-hair: var(--hair);
+  --qb-ink: var(--ink); /* near-black headings */
+  --qb-muted: var(--muted); /* readable secondary */
+  --qb-muted2: var(--faint);
+  --qb-amber: var(--amber);
+  --qb-green: var(--green);
+  --qb-blue: var(--blue);
+  --qb-purple: var(--violet);
+  --qb-accent: var(--accent);
 
   /* Motion identity (see docs/.../2026-06-21-quickboard-motion.md) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -33,6 +77,22 @@
 }
 .qb-press:active {
   transform: scale(0.97);
+}
+
+/* --- Dark sidebar nav / category hover (only on non-active rows) --- */
+.qb-side-nav,
+.qb-side-cat {
+  transition: background var(--dur-quick) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  /* Active rows paint a white pill via inline bg / NavIndicator; only tint
+     the transparent (non-active) ones on hover. */
+  .qb-side-nav:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .qb-side-cat[aria-pressed="false"]:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 /* --- ItemRow hover-reveal (hover-capable pointers only) --- */

@@ -2,10 +2,13 @@
 // category always renders the same accent across Sidebar and Home.
 
 const PALETTE = [
-  "var(--qb-amber)",
-  "var(--qb-green)",
-  "var(--qb-blue)",
-  "var(--qb-purple)",
+  "var(--accent)",
+  "var(--green)",
+  "var(--amber)",
+  "var(--blue)",
+  "var(--violet)",
+  "var(--rose)",
+  "var(--cyan)",
 ] as const;
 
 export function categoryColor(name: string): string {

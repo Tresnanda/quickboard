@@ -130,10 +130,18 @@ export function AddItemDialog() {
 
   return (
     <Dialog.Root open={addOpen} onOpenChange={handleOpenChange}>
-      <AnimatePresence>
-        {addOpen && (
-          <Dialog.Portal forceMount>
+      {/* Portal is always rendered; AnimatePresence (whose DIRECT children are
+          the motion overlay/content) owns mount + unmount so the exit plays and
+          THEN the nodes are removed. forceMount keeps Radix from yanking the
+          overlay/content mid-exit. Previously AnimatePresence's only direct
+          child was Dialog.Portal (not a motion node), so on close the portal —
+          and its dimming overlay — was removed without an exit and could linger
+          / keep blocking pointer events (the "stuck overlay" freeze). */}
+      <Dialog.Portal forceMount>
+        <AnimatePresence>
+          {addOpen && (
             <MotionOverlay
+              key="qb-add-overlay"
               forceMount
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -142,12 +150,17 @@ export function AddItemDialog() {
               style={{
                 position: "fixed",
                 inset: 0,
-                background: "rgba(25, 25, 23, 0.32)",
+                background: "rgba(11, 11, 12, 0.4)",
                 backdropFilter: "blur(2px)",
                 zIndex: 50,
               }}
             />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {addOpen && (
             <MotionContent
+              key="qb-add-content"
               forceMount
               onOpenAutoFocus={(e) => {
                 e.preventDefault();
@@ -179,10 +192,10 @@ export function AddItemDialog() {
                 width: "min(440px, calc(100vw - 2rem))",
                 maxHeight: "calc(100vh - 2rem)",
                 overflowY: "auto",
-                background: "var(--qb-bg)",
-                border: "1px solid var(--qb-border)",
-                borderRadius: "14px",
-                boxShadow: "0 18px 48px rgba(25, 25, 23, 0.16)",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-card)",
+                boxShadow: "var(--shadow-pop)",
                 padding: "1.25rem",
                 zIndex: 51,
                 fontFamily: "inherit",
@@ -551,9 +564,9 @@ export function AddItemDialog() {
             </div>
           </form>
             </MotionContent>
-          </Dialog.Portal>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </Dialog.Portal>
     </Dialog.Root>
   );
 }

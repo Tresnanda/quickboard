@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import { FileText, KeyRound, Lock } from "lucide-react";
+import { FileText, KeyRound, Lock, X } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { categoryColor } from "../lib/category-color";
 import { ItemRow } from "../components/ItemRow";
@@ -59,7 +59,8 @@ const MORPH_TRANSITION = {
 };
 
 export function Home() {
-  const { items, query, reload, loading, error } = useItems();
+  const { items, query, reload, loading, error, categoryFilter, setCategoryFilter } =
+    useItems();
   const reduce = useReducedMotion();
   const now = useMemo(() => new Date(), []);
 
@@ -93,8 +94,13 @@ export function Home() {
   }, [latestId]);
 
   const filtered = useMemo(
-    () => items.filter((i) => matchesQuery(i, query)),
-    [items, query],
+    () =>
+      items.filter(
+        (i) =>
+          matchesQuery(i, query) &&
+          (categoryFilter === null || i.category === categoryFilter),
+      ),
+    [items, query, categoryFilter],
   );
 
   const pinned = useMemo(() => filtered.filter((i) => i.pinned), [filtered]);
@@ -170,6 +176,47 @@ export function Home() {
         </span>
       </header>
 
+      {/* Active category filter chip (set from the Sidebar). Click to clear. */}
+      {categoryFilter !== null && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <button
+            type="button"
+            className="qb-press"
+            onClick={() => setCategoryFilter(null)}
+            aria-label={`Clear filter: ${categoryFilter}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              padding: "0.3rem 0.5rem 0.3rem 0.6rem",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "999px",
+              boxShadow: "var(--shadow-sm)",
+              fontSize: "0.8125rem",
+              fontWeight: 600,
+              color: "var(--ink)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: categoryColor(categoryFilter),
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: "var(--muted)", fontWeight: 500 }}>Filtered:</span>
+            {categoryFilter}
+            <X size={14} color="var(--muted)" />
+          </button>
+        </div>
+      )}
+
       {error && (
         <div
           style={{
@@ -230,7 +277,9 @@ export function Home() {
           >
             {query
               ? "Nothing matches your search."
-              : "No items yet. Add your first with the button on the left."}
+              : categoryFilter !== null
+                ? `No items in ${categoryFilter}.`
+                : "No items yet. Add your first with the button on the left."}
           </div>
         ) : (
           <motion.div
@@ -372,10 +421,10 @@ function QuickCard({
         flexDirection: "column",
         gap: "0.6rem",
         padding: "0.85rem",
-        background: "var(--qb-bg)",
-        border: "1px solid var(--qb-border)",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
         borderRadius: "12px",
-        boxShadow: "0 1px 2px rgba(25, 25, 23, 0.04)",
+        boxShadow: "var(--shadow-card)",
         minWidth: 0,
       }}
     >

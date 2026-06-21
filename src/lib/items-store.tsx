@@ -15,6 +15,8 @@ type ItemsState = {
   categories: string[];
   query: string;
   setQuery: (q: string) => void;
+  categoryFilter: string | null;
+  setCategoryFilter: (category: string | null) => void;
   addOpen: boolean;
   setAddOpen: (open: boolean) => void;
   reload: () => Promise<void>;
@@ -28,6 +30,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,13 +62,15 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       categories,
       query,
       setQuery,
+      categoryFilter,
+      setCategoryFilter,
       addOpen,
       setAddOpen,
       reload,
       loading,
       error,
     }),
-    [items, categories, query, addOpen, reload, loading, error],
+    [items, categories, query, categoryFilter, addOpen, reload, loading, error],
   );
 
   return <ItemsContext.Provider value={value}>{children}</ItemsContext.Provider>;
