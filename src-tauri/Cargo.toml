@@ -30,6 +30,14 @@ tauri-plugin-drag = "=2.1.1"
 aes-gcm = "=0.10.3"
 rand = "=0.8.5"
 
+# DEK persistence (Plan 2, Task 5): store the Data Encryption Key in the OS
+# keyring (macOS login keychain via the `apple-native` backend). keyring 3.2.0
+# ships its in-memory `mock` credential store without a cargo feature gate; it
+# is used ONLY in unit tests so they never touch the real keychain (which would
+# pop a GUI prompt / hang headless). Exact-pinned per supply-chain rules.
+keyring = { version = "=3.2.0", features = ["apple-native"] }
+base64 = "=0.22.1"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 # SPIKE: Touch ID gate via LocalAuthentication (LAContext). robius-authentication
 # wraps objc2-local-authentication and works UNSIGNED (no keychain entitlement),
