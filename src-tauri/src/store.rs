@@ -171,6 +171,12 @@ impl Store {
         let pt = decrypt(&self.key, &body)?;
         String::from_utf8(pt).map_err(|e| e.to_string())
     }
+
+    pub fn list_categories(&self) -> Result<Vec<String>, String> {
+        let mut stmt = self.conn.prepare("SELECT DISTINCT category FROM items ORDER BY category").map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |r| r.get::<_,String>(0)).map_err(|e| e.to_string())?;
+        rows.collect::<Result<_,_>>().map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]

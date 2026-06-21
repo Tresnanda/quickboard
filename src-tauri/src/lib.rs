@@ -95,6 +95,12 @@ pub fn run() {
             commands::list_items,
             commands::add_text_item,
             commands::get_text_value,
+            // Plan 2, Task 3: file/CRUD/category IPC commands.
+            commands::set_pinned,
+            commands::delete_item,
+            commands::list_categories,
+            commands::add_file_item,
+            commands::file_to_temp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
