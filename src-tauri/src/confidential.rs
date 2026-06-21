@@ -30,11 +30,14 @@ use robius_authentication::{
     AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText,
 };
 
-/// SPIKE: trigger a Touch ID system prompt via LocalAuthentication (LAContext).
+/// Trigger a Touch ID system prompt via LocalAuthentication (LAContext).
 ///
 /// Returns `Ok(true)` when the user authenticates successfully, and `Err(msg)`
 /// on cancel or any failure. Requires NO keychain entitlement and NO
 /// code-signing, so it works under unsigned `tauri dev`.
+///
+/// Retained for Plan 3 confidential gate.
+#[allow(dead_code)] // retained for Plan 3 confidential gate
 #[cfg(target_os = "macos")]
 pub fn biometric_roundtrip() -> Result<bool, String> {
     // Build a policy that requests biometrics (Touch ID). We also allow the
@@ -72,8 +75,9 @@ pub fn biometric_roundtrip() -> Result<bool, String> {
     }
 }
 
-/// Non-macOS fallback so the crate still compiles on other targets. The spike is
+/// Non-macOS fallback so the crate still compiles on other targets.
 /// macOS-only; elsewhere it is simply unsupported.
+#[allow(dead_code)] // retained for Plan 3 confidential gate
 #[cfg(not(target_os = "macos"))]
 pub fn biometric_roundtrip() -> Result<bool, String> {
     Err("biometric spike is only supported on macOS".to_string())
