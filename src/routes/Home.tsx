@@ -11,12 +11,13 @@ import { useItems } from "../lib/items-store";
 import { categoryColor, categoryTile } from "../lib/category-color";
 import { fileToTemp } from "../lib/ipc";
 import { useCopy } from "../lib/use-copy";
+import { usePreview } from "../lib/use-preview";
 import { CopyMorph } from "../components/CopyMorph";
+import { ConfidentialFrost } from "../components/Generative";
 import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
 import { DitherArt } from "../components/DitherArt";
-import { Button } from "../components/ui/button";
 import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
@@ -416,8 +417,8 @@ export function Home() {
               animate="show"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                gap: "0.875rem",
+                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                gap: "0.8125rem",
               }}
             >
               {pinned.map((item) => (
@@ -521,26 +522,30 @@ export function Home() {
                     />
                   </div>
 
-                  {rows.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      data-item-id={item.id}
-                      // Shared id with the Quick-access card: pin toggle morphs
-                      // this row into / out of the grid. `layout` also drives the
-                      // FLIP reflow when the search filter changes the visible set.
-                      layoutId={reduce ? undefined : item.id}
-                      layout={reduce ? false : "position"}
-                      variants={cardVariants}
-                      transition={MORPH_TRANSITION}
-                      style={{ position: "relative" }}
-                    >
-                      <ItemRow
-                        item={item}
-                        onChanged={reload}
-                        justAdded={item.id === flashId}
-                      />
-                    </motion.div>
-                  ))}
+                  {/* iOS grouped-inset container: rows are hairline-divided
+                      inside one rounded, soft-shadowed surface. */}
+                  <div className="qb-group">
+                    {rows.map((item) => (
+                      <motion.div
+                        key={item.id}
+                        data-item-id={item.id}
+                        // Shared id with the Quick-access card: pin toggle morphs
+                        // this row into / out of the grid. `layout` also drives
+                        // the FLIP reflow when the search filter changes the set.
+                        layoutId={reduce ? undefined : item.id}
+                        layout={reduce ? false : "position"}
+                        variants={cardVariants}
+                        transition={MORPH_TRANSITION}
+                        style={{ position: "relative" }}
+                      >
+                        <ItemRow
+                          item={item}
+                          onChanged={reload}
+                          justAdded={item.id === flashId}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </motion.div>
@@ -690,8 +695,10 @@ function QuickCard({
   onChanged: () => void | Promise<void>;
 }) {
   const isText = item.kind === "Text";
+  const isFile = item.kind === "File";
   const tile = categoryTile(item.category, item.confidential);
   const { copied, copy } = useCopy(item.id);
+  const { preview, confidential } = usePreview(item);
 
   async function handleDragStart(event: React.DragEvent) {
     // R3: gate copy/reveal behind Touch ID
@@ -703,13 +710,6 @@ function QuickCard({
       /* drag-out is best-effort */
     }
   }
-
-  // R3: gate copy/reveal behind Touch ID
-  const preview = item.confidential
-    ? "••••••••"
-    : isText
-      ? "Text snippet"
-      : "File";
 
   return (
     <motion.div
@@ -724,109 +724,212 @@ function QuickCard({
         position: "relative",
         display: "flex",
         flexDirection: "column",
-        gap: "0.75rem",
-        padding: "0.9rem",
-        background: "#fafafa",
-        border: "1px solid #eeeeec",
+        background: "#ffffff",
         borderRadius: "var(--r-card)",
-        boxShadow: "var(--shadow-sm)",
+        overflow: "hidden",
         minWidth: 0,
       }}
     >
-      <motion.div
-        // Cross-fade the differing inner bits while the outer box morphs.
-        layout={reduce ? false : "position"}
+      {/* FILE: generative dither cover band (larger seeded art, like the mock). */}
+      {isFile && (
+        <motion.div
+          layout={reduce ? false : "position"}
+          className="qb-img-outline"
+          style={{
+            position: "relative",
+            height: "78px",
+            background: "#16161a",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "flex-end",
+            padding: "0.625rem 0.8125rem",
+          }}
+        >
+          <DitherInverse seed={item.label} />
+          <span
+            style={{
+              position: "relative",
+              zIndex: 1,
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              color: "#ffffff",
+              textShadow: "0 1px 4px rgba(0,0,0,.5)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {item.label}
+          </span>
+          {/* ⋯ floats over the cover, top-right (recolored light for contrast). */}
+          <span
+            className="qb-cover-menu"
+            style={{ position: "absolute", top: "0.4rem", right: "0.4rem", zIndex: 2 }}
+          >
+            <ItemMenu item={item} onChanged={onChanged} />
+          </span>
+        </motion.div>
+      )}
+
+      <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "0.5rem",
+          flexDirection: "column",
+          gap: "0.75rem",
+          padding: isFile ? "0.8125rem 0.9rem 0.9rem" : "0.9rem",
         }}
       >
-        <span
-          style={{
-            width: "38px",
-            height: "38px",
-            borderRadius: "var(--r-tile)",
-            background: tile.bg,
-            border: `1px solid ${tile.border}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: tile.fg,
-            flexShrink: 0,
-          }}
-        >
-          {item.confidential ? (
-            <Lock size={16} />
-          ) : isText ? (
-            <KeyRound size={16} />
-          ) : (
-            <FileText size={16} />
-          )}
-        </span>
-        <ItemMenu item={item} onChanged={onChanged} />
-      </motion.div>
-
-      <motion.div layout={reduce ? false : "position"} style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: "0.9375rem",
-            fontWeight: 700,
-            color: "var(--ink)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            letterSpacing: "-0.015em",
-          }}
-        >
-          {item.label}
-        </div>
-        <div
-          style={{
-            fontSize: "0.75rem",
-            fontFamily: item.confidential
-              ? "ui-monospace, SFMono-Regular, monospace"
-              : "inherit",
-            color: "var(--muted)",
-            marginTop: "3px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            letterSpacing: item.confidential ? "0.05em" : "0",
-          }}
-        >
-          {preview}
-        </div>
-      </motion.div>
-
-      {/* Primary action: copy (Text) / drag (File) */}
-      <motion.div layout={reduce ? false : "position"}>
-        {isText ? (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void copy()}
-            className={cn(
-              "qb-press h-auto w-full gap-1.5 rounded-[9px] px-2.5 py-2 text-[0.8125rem] font-semibold transition-colors",
-              copied ? "text-[var(--green)]" : "text-[var(--text)]",
-            )}
+        {/* TEXT / CONFIDENTIAL: tile + ⋯ row (file cover already has its own). */}
+        {!isFile && (
+          <motion.div
+            // Cross-fade the differing inner bits while the outer box morphs.
+            layout={reduce ? false : "position"}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "0.5rem",
+            }}
           >
-            <CopyMorph copied={copied} reduce={reduce} />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            draggable
-            onDragStart={handleDragStart}
-            className="qb-press h-auto w-full cursor-grab gap-1.5 rounded-[9px] px-2.5 py-2 text-[0.8125rem] font-semibold text-[var(--text)]"
-          >
-            <FileText size={14} />
-            drag out
-          </Button>
+            <span
+              className="qb-tile"
+              style={{
+                position: "relative",
+                width: "38px",
+                height: "38px",
+                borderRadius: "var(--r-tile)",
+                background: tile.bg,
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: tile.fg,
+                flexShrink: 0,
+              }}
+            >
+              {/* Seeded dither behind the glyph — subtle per-item identity. */}
+              <DitherArt
+                width={38}
+                height={38}
+                density={0.95}
+                seed={item.label}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "38px",
+                  height: "38px",
+                  opacity: 0.32,
+                }}
+              />
+              <span style={{ position: "relative", zIndex: 1 }}>
+                {item.confidential ? <Lock size={16} /> : <KeyRound size={16} />}
+              </span>
+            </span>
+            <ItemMenu item={item} onChanged={onChanged} />
+          </motion.div>
         )}
-      </motion.div>
+
+        <motion.div layout={reduce ? false : "position"} style={{ minWidth: 0 }}>
+          {/* File label already shown on the cover; show meta line instead. */}
+          {!isFile && (
+            <div
+              style={{
+                fontSize: "0.9375rem",
+                fontWeight: 700,
+                color: "var(--ink)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                letterSpacing: "-0.015em",
+              }}
+            >
+              {item.label}
+            </div>
+          )}
+
+          {confidential ? (
+            <div style={{ marginTop: isFile ? 0 : "3px" }}>
+              <ConfidentialFrost width={120} />
+            </div>
+          ) : (
+            <div
+              className={preview ? "tabular" : undefined}
+              style={{
+                fontSize: "0.75rem",
+                fontFamily: preview
+                  ? "ui-monospace, SFMono-Regular, monospace"
+                  : "inherit",
+                color: "var(--muted)",
+                marginTop: isFile ? 0 : "3px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                letterSpacing: preview ? "0.02em" : "0",
+              }}
+            >
+              {preview ?? (isFile ? `File · ${item.category}` : "Text snippet")}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Primary action: glassy copy (Text) / drag (File) */}
+        <motion.div layout={reduce ? false : "position"}>
+          {isText ? (
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className={cn(
+                "qb-glass-btn",
+                copied && "text-[var(--green)]",
+              )}
+            >
+              <CopyMorph copied={copied} reduce={reduce} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              draggable
+              onDragStart={handleDragStart}
+              className="qb-glass-btn cursor-grab"
+            >
+              <FileText size={14} />
+              drag out
+            </button>
+          )}
+        </motion.div>
+      </div>
     </motion.div>
+  );
+}
+
+/**
+ * Inverted seeded dither used on dark file-cover bands: same generative
+ * pattern as the tiles, but rendered white-on-dark so it reads against the
+ * #16161a cover. We wrap <DitherArt> (which paints ink dots) and invert it via
+ * a CSS filter so the dots become white, then soft-mask the edges.
+ */
+function DitherInverse({ seed }: { seed: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        opacity: 0.55,
+        filter: "invert(1)",
+        maskImage:
+          "radial-gradient(120% 90% at 30% 20%, #000 30%, transparent 78%)",
+        WebkitMaskImage:
+          "radial-gradient(120% 90% at 30% 20%, #000 30%, transparent 78%)",
+      }}
+    >
+      <DitherArt
+        width={200}
+        height={78}
+        density={1.05}
+        seed={seed}
+        style={{ width: "100%", height: "78px" }}
+      />
+    </span>
   );
 }

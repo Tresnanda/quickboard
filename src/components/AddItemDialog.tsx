@@ -4,13 +4,13 @@ import { FileText, Folder, KeyRound, Lock } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { addFile, addText } from "../lib/ipc";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "./ui/sheet";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -27,16 +27,17 @@ function lastPathSegment(p: string): string {
 }
 
 /**
- * Add-item dialog — rebuilt on shadcn/ui `Dialog`.
+ * Add-item sheet — an iOS-flavoured **bottom sheet** (shadcn/ui `Sheet`, which
+ * wraps Radix Dialog under the hood). It slides up from the bottom with rounded
+ * top corners and a grab-handle bar.
  *
- * NO Framer Motion: the enter/exit animation comes entirely from shadcn's
- * data-state Tailwind classes (`tailwindcss-animate`), which mount + unmount
- * reliably. (The previous Framer + Radix `forceMount` version left the backdrop
- * up with the content never appearing.)
+ * NO Framer Motion: the slide-up / slide-down comes from shadcn's data-state
+ * Tailwind classes (`tailwindcss-animate`), which mount + unmount reliably and
+ * are driven entirely by the `open` prop.
  *
  * Controlled by `useItems().addOpen` — opened from the sidebar's "Add item"
- * button. There is no DialogTrigger; closing (Esc / overlay / Cancel / X) flips
- * `addOpen` back to false and the overlay clears with the content.
+ * button. There is no trigger; closing (Esc / overlay / Cancel / X) flips
+ * `addOpen` back to false and the sheet clears with its content.
  */
 export function AddItemDialog() {
   const { addOpen, setAddOpen, categories, reload } = useItems();
@@ -122,44 +123,54 @@ export function AddItemDialog() {
   }
 
   return (
-    <Dialog open={addOpen} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="max-w-[440px] gap-0 overflow-hidden p-0"
+    <Sheet open={addOpen} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88vh] w-full max-w-[520px] gap-0 overflow-y-auto rounded-t-[22px] border-0 p-0 shadow-[0_-24px_60px_-20px_rgba(0,0,0,0.35)]"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           labelInputRef.current?.focus();
         }}
         aria-describedby={`${datalistId}-desc`}
       >
+        {/* Grab-handle bar (iOS sheet affordance). */}
+        <div
+          aria-hidden="true"
+          className="flex justify-center pb-1 pt-2.5"
+        >
+          <span className="h-1 w-9 rounded-full bg-[#d8d8d4]" />
+        </div>
+
         {/* Decorative real-Bayer-dither header band (ink-first, monochrome).
             Purely cosmetic — does not affect open/close. */}
         <div
           aria-hidden="true"
-          className="relative h-[88px] w-full overflow-hidden border-b border-border bg-[#fafafa]"
+          className="relative h-[84px] w-full overflow-hidden border-b border-border bg-[#fafafa]"
         >
           <DitherArt
-            width={440}
-            height={88}
+            width={520}
+            height={84}
             density={1.05}
+            seed="add-item-sheet"
             className="absolute inset-0 opacity-90"
-            style={{ width: "100%", height: "88px" }}
+            style={{ width: "100%", height: "84px" }}
           />
           {/* Soft fade into the form so the dots dissolve, not cut. */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white/85" />
         </div>
 
-        <DialogHeader className="space-y-1 px-5 pt-4 text-left">
-          <DialogTitle className="text-base font-bold tracking-tight text-[var(--ink)]">
+        <SheetHeader className="space-y-1 px-5 pt-4 text-left">
+          <SheetTitle className="text-base font-bold tracking-tight text-[var(--ink)]">
             Add item
-          </DialogTitle>
-          <DialogDescription id={`${datalistId}-desc`} className="text-xs">
+          </SheetTitle>
+          <SheetDescription id={`${datalistId}-desc`} className="text-xs">
             Store a snippet of text or a file, encrypted locally.
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-4 px-5 pb-5 pt-4"
+          className="flex flex-col gap-4 px-5 pb-6 pt-4"
         >
           {/* Label */}
           <div className="space-y-1.5">
@@ -304,21 +315,26 @@ export function AddItemDialog() {
             </div>
           )}
 
-          <DialogFooter className="mt-1 gap-2 sm:gap-2">
+          <SheetFooter className="mt-1 gap-2 sm:gap-2">
             <Button
               type="button"
               variant="outline"
+              className="qb-press"
               onClick={() => handleOpenChange(false)}
               disabled={submitting}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={!valid || submitting}>
+            <Button
+              type="submit"
+              className="qb-press"
+              disabled={!valid || submitting}
+            >
               {submitting ? "Adding…" : "Add item"}
             </Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

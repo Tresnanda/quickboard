@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import type { Item } from "../lib/types";
+import { GenerativeAvatar } from "./Generative";
 import { Button } from "./ui/button";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -483,18 +484,8 @@ export function Sidebar() {
               "0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04)",
           }}
         >
-          <span
-            aria-hidden="true"
-            className="qb-img-outline"
-            style={{
-              width: "30px",
-              height: "30px",
-              borderRadius: "8px",
-              background:
-                "linear-gradient(135deg, #cfe0f0, #e8d6f0, #f0e0d0)",
-              flexShrink: 0,
-            }}
-          />
+          {/* Deterministic generative gradient avatar (hashed seed). */}
+          <GenerativeAvatar seed="quickboard-local-you" size={30} radius={8} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{

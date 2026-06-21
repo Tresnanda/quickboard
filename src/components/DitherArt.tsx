@@ -15,6 +15,12 @@ import { useReducedMotion } from "framer-motion";
  * a CSS dot/noise background. It is not animated, so `prefers-reduced-motion`
  * needs no special handling beyond rendering the same static frame; we read it
  * only to keep the contract explicit and avoid any future motion.
+ *
+ * GENERATIVE IDENTITY (premium pass): pass a `seed` string (e.g. an item's
+ * label) and the blob field is derived **deterministically** from a hash of
+ * that seed — every seed gets its own unique-but-stable monochrome pattern, so
+ * each item carries a distinct, code-generated dither "fingerprint". Omit
+ * `seed` to get the original fixed arrangement.
  */
 
 // 8×8 ordered Bayer matrix (values 0..63), normalised to thresholds in [0,1).
@@ -37,7 +43,8 @@ const INK = { r: 11, g: 11, b: 12 };
 type Blob = { x: number; y: number; r: number; v: number };
 
 // A fixed, pleasant arrangement of overlapping soft blobs (in 0..1 space) used
-// to build the grayscale source. Deterministic so the art is stable.
+// to build the grayscale source when no seed is supplied. Deterministic so the
+// art is stable.
 const BLOBS: Blob[] = [
   { x: 0.32, y: 0.36, r: 0.46, v: 0.95 },
   { x: 0.68, y: 0.3, r: 0.4, v: 0.8 },
@@ -45,6 +52,51 @@ const BLOBS: Blob[] = [
   { x: 0.2, y: 0.72, r: 0.34, v: 0.6 },
   { x: 0.82, y: 0.66, r: 0.3, v: 0.55 },
 ];
+
+// --- Deterministic seeding ----------------------------------------------------
+// FNV-1a 32-bit string hash → seeds a tiny mulberry32 PRNG. Same seed always
+// produces the same blob field, so an item's dither is stable across renders.
+function hashSeed(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(a: number): () => number {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Build a unique-but-stable blob field from a seed string. 3–5 blobs scattered
+ * across the canvas with varied radius / intensity — enough variation that no
+ * two seeds look alike, while every blob stays soft and on-brand.
+ */
+function blobsForSeed(seed: string): { blobs: Blob[]; threshold: number } {
+  const rand = mulberry32(hashSeed(seed));
+  const count = 3 + Math.floor(rand() * 3); // 3..5 blobs
+  const blobs: Blob[] = [];
+  for (let i = 0; i < count; i++) {
+    blobs.push({
+      x: 0.18 + rand() * 0.64,
+      y: 0.18 + rand() * 0.64,
+      r: 0.28 + rand() * 0.3,
+      v: 0.55 + rand() * 0.45,
+    });
+  }
+  // A small per-seed threshold bias shifts overall ink coverage so even similar
+  // blob fields read differently (some sparser, some denser).
+  const threshold = 0.86 + rand() * 0.28; // multiplies density, ~0.86..1.14
+  return { blobs, threshold };
+}
 
 export type DitherArtProps = {
   width: number;
@@ -55,6 +107,11 @@ export type DitherArtProps = {
    * Multiplies the source luminance before thresholding. Default 1.
    */
   density?: number;
+  /**
+   * Optional seed string → deterministic, unique blob field (each seed gets a
+   * stable, distinct pattern). Omit for the original fixed arrangement.
+   */
+  seed?: string;
   style?: React.CSSProperties;
 };
 
@@ -63,6 +120,7 @@ export function DitherArt({
   height,
   className,
   density = 1,
+  seed,
   style,
 }: DitherArtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +142,14 @@ export function DitherArt({
     canvas.width = w;
     canvas.height = h;
 
+    // Seeded → unique blob field + per-seed coverage bias; else the fixed set.
+    const { blobs, seedDensity } = seed
+      ? (() => {
+          const f = blobsForSeed(seed);
+          return { blobs: f.blobs, seedDensity: f.threshold };
+        })()
+      : { blobs: BLOBS, seedDensity: 1 };
+
     const img = ctx.createImageData(w, h);
     const data = img.data;
 
@@ -94,7 +160,7 @@ export function DitherArt({
 
         // --- Soft grayscale source: sum overlapping radial blobs. ---
         let lum = 0;
-        for (const b of BLOBS) {
+        for (const b of blobs) {
           const dx = nx - b.x;
           const dy = ny - b.y;
           const d = Math.sqrt(dx * dx + dy * dy);
@@ -104,7 +170,7 @@ export function DitherArt({
         }
         // Gentle vignette so edges fade out (keeps art floating, not boxy).
         const vignette = 1 - Math.min(1, ((nx - 0.5) ** 2 + (ny - 0.5) ** 2) * 1.7);
-        lum = lum * vignette * density;
+        lum = lum * vignette * density * seedDensity;
         // Clamp to [0,1].
         if (lum > 1) lum = 1;
         if (lum < 0) lum = 0;
@@ -127,7 +193,7 @@ export function DitherArt({
     }
 
     ctx.putImageData(img, 0, 0);
-  }, [width, height, density, reduce]);
+  }, [width, height, density, seed, reduce]);
 
   return (
     <canvas

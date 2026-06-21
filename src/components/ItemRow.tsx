@@ -4,7 +4,10 @@ import { FileText, KeyRound, Lock } from "lucide-react";
 import { fileToTemp } from "../lib/ipc";
 import { categoryTile } from "../lib/category-color";
 import { useCopy } from "../lib/use-copy";
+import { usePreview } from "../lib/use-preview";
 import { CopyMorph } from "./CopyMorph";
+import { ConfidentialFrost } from "./Generative";
+import { DitherArt } from "./DitherArt";
 import { ItemMenu } from "./ItemMenu";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -17,9 +20,16 @@ type ItemRowProps = {
   justAdded?: boolean;
 };
 
+/**
+ * A single Library row, styled as an iOS grouped-inset list row: a seeded
+ * dither tile + label + value preview + copy/drag + ⋯. The depth and the
+ * hairline dividers come from the enclosing `.qb-group` container (see Home),
+ * so the row itself carries no border or shadow.
+ */
 export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
   const reduce = useReducedMotion();
   const { copied, copy } = useCopy(item.id);
+  const { preview, confidential } = usePreview(item);
 
   const isText = item.kind === "Text";
   const tile = categoryTile(item.category, item.confidential);
@@ -35,50 +45,47 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
     }
   }
 
-  // Confidential value preview is masked; the real Touch ID gate is R3.
-  // R3: gate copy/reveal behind Touch ID
-  const preview = item.confidential
-    ? "••••••••"
-    : `${item.category} · ${item.kind}`;
-
   return (
-    <div
-      className={`qb-card-row${justAdded ? " qb-add-flash" : ""}`}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.875rem",
-        padding: "0.7rem 0.8rem",
-        background: "var(--card)",
-        border: "1px solid var(--border)",
-        borderRadius: "14px",
-        boxShadow: "var(--shadow-sm)",
-        marginBottom: "0.5rem",
-      }}
-    >
-      {/* Monochrome icon tile (R2.5) — neutral gray bg + ink glyph, no color */}
+    <div className={`qb-group-row${justAdded ? " qb-add-flash" : ""}`}>
+      {/* Seeded dither tile (generative per-item identity) behind the glyph. */}
       <div
+        className="qb-tile"
         style={{
           position: "relative",
-          width: "38px",
-          height: "38px",
+          width: "36px",
+          height: "36px",
           flexShrink: 0,
           borderRadius: "var(--r-tile)",
           background: tile.bg,
-          border: `1px solid ${tile.border}`,
+          overflow: "hidden",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           color: tile.fg,
         }}
       >
-        {item.confidential ? (
-          <Lock size={16} />
-        ) : isText ? (
-          <KeyRound size={16} />
-        ) : (
-          <FileText size={16} />
-        )}
+        <DitherArt
+          width={36}
+          height={36}
+          density={0.95}
+          seed={item.label}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "36px",
+            height: "36px",
+            opacity: 0.32,
+          }}
+        />
+        <span style={{ position: "relative", zIndex: 1 }}>
+          {item.confidential ? (
+            <Lock size={16} />
+          ) : isText ? (
+            <KeyRound size={16} />
+          ) : (
+            <FileText size={16} />
+          )}
+        </span>
       </div>
 
       {/* Label + value preview */}
@@ -86,7 +93,7 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
         <div
           style={{
             fontSize: "0.9375rem",
-            fontWeight: 600,
+            fontWeight: 700,
             color: "var(--ink)",
             letterSpacing: "-0.01em",
             whiteSpace: "nowrap",
@@ -96,22 +103,27 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
         >
           {item.label}
         </div>
-        <div
-          style={{
-            fontSize: "0.75rem",
-            fontFamily: item.confidential
-              ? "ui-monospace, SFMono-Regular, monospace"
-              : "inherit",
-            color: "var(--muted)",
-            marginTop: "2px",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            letterSpacing: item.confidential ? "0.05em" : "0",
-          }}
-        >
-          {preview}
-        </div>
+        {confidential ? (
+          <ConfidentialFrost width={110} />
+        ) : (
+          <div
+            className={preview ? "tabular" : undefined}
+            style={{
+              fontSize: "0.75rem",
+              fontFamily: preview
+                ? "ui-monospace, SFMono-Regular, monospace"
+                : "inherit",
+              color: "var(--muted)",
+              marginTop: "2px",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              letterSpacing: preview ? "0.02em" : "0",
+            }}
+          >
+            {preview ?? (isText ? "snippet · text" : `file · ${item.category}`)}
+          </div>
+        )}
       </div>
 
       {/* Right actions — rest at low opacity, reveal on row hover (CSS-gated) */}

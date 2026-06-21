@@ -92,3 +92,29 @@ After R1+R2 the look was over-colored and had hard edges. Corrections:
 **Window: edge-to-edge + DRAGGABLE.** Keep `titleBarStyle: Overlay`. The move-window bug must be fixed: put `-webkit-app-region: drag` on the canvas margins/gaps and the sidebar's empty/brand area; `no-drag` on every interactive element. Traffic lights overlay the light sidebar top-left (clear of the brand).
 
 **DITHER MOTIF — every modal & popup card.** Build a reusable **`<DitherArt>`** React component: a `<canvas>` that renders a soft procedural source (gradient / overlapping cloud blobs) and applies a **real ordered Bayer (4×4 or 8×8) 1-bit monochrome dither** — authentic dithering, NOT a CSS dot/noise background. Use it as a decorative header or side panel in **EVERY modal / popup card**: the Add-item dialog now; the confidential-unlock, edit, and customize dialogs as they're built (R3–R5); plus the empty state and (R4) default item covers. Monochrome, tasteful, subtle.
+
+---
+
+## PREMIUM + React design-power + full interactive layer (FINAL build target)
+
+The app currently reads "generic admin panel." Make it premium + uniquely crafted + powerful, leveraging what only code/React can do.
+
+**1. Premium visual — match `.superpowers/brainstorm/47183-1782062785/content/target-premium.html`:**
+- **Depth:** every card/group uses layered soft `box-shadow` (shadows over hard borders). iOS **squircle** radii (16–20px); inset shadows on tiles.
+- **Denser, richer Quick-access cards** (3-up): icon tile + label + **value preview** (mono) + a glassy copy button — not one giant half-empty card.
+- **Library = iOS grouped-inset lists:** each category is a rounded container with hairline-divided rows (iOS Settings style).
+- **iOS sheet** for the Add modal (slides up from bottom, grab handle, rounded top corners), springy press (`scale(0.96)`).
+
+**2. React design-power (generative / dynamic visuals — what the user means by "power"):**
+- **Generative per-item dither identity:** extend `DitherArt` with a `seed` param → a **unique deterministic** monochrome dithered pattern hashed from the item's label, used as the item's tile/cover art (every item visually distinct, all code-generated). The dither motif becomes the app's signature.
+- **Confidential = animated frost:** confidential values render as a frosted/dithered blur + "Touch ID to reveal"; unlocking animates the frost away (sets up R3).
+- **Generative avatar** (deterministic gradient/dither). **Reactive** hover/press effects; spring-driven shared-layout morphs (pin fly, copy morph).
+
+**3. Full interactive layer (keyboard-driven power tool):**
+- **⌘K command palette:** overlay, instant fuzzy search, `↑↓` nav, **Enter = copy**, `⌘Enter` = drag, Esc close.
+- **Keyboard nav on Home:** `↑↓`/`j k` through items, `Enter`/`c` copy, `p` pin, `e` edit, `/` focus search, `⌘1–9` nav.
+- **Live fuzzy search + match highlighting,** ranked by most-used (`last_used_at`/`use_count`).
+- **Optimistic + animated state** (instant pin/add/delete with spring).
+- **Inline quick-edit** (double-click a value → edit → save on blur) + **hover-to-peek**.
+
+Apply **emil-design-eng + motion-design + make-interfaces-feel-better** throughout. Ink-first, no emoji, shadcn primitives, reduced-motion + a11y, exact-pin deps.
