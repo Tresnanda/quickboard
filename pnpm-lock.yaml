@@ -50,6 +50,9 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      slot-text:
+        specifier: 0.3.1
+        version: 0.3.1(react@19.2.7)
       tailwind-merge:
         specifier: 3.6.0
         version: 3.6.0
@@ -1238,6 +1241,23 @@ packages:
     resolution: {integrity: sha512-46uFvgrXTVxZcUorgSSRZ4y+ieqLLQRMlG4bnCZKW3qI6BZm7Rg4ntMW4p1mILEEBZWrFlcpp0AyIIlM6jD9iw==}
     engines: {node: '>=10'}
 
+  slot-text@0.3.1:
+    resolution: {integrity: sha512-gDHfMnFrz4CxqD7H8F3CqWVGYwTbgjpJiIH1bQg1Tj60TzgnLe47vuQDHNeyg4zbhsEAPFvUp05nG7lKsboCVw==}
+    peerDependencies:
+      react: '>=18 <20'
+      solid-js: '>=1.8 <2'
+      svelte: '>=4 <6'
+      vue: '>=3.4 <4'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      solid-js:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -2323,6 +2343,10 @@ snapshots:
       seroval: 1.5.4
 
   seroval@1.5.4: {}
+
+  slot-text@0.3.1(react@19.2.7):
+    optionalDependencies:
+      react: 19.2.7
 
   source-map-js@1.2.1: {}
 

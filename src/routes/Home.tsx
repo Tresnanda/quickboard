@@ -1,9 +1,10 @@
-import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { FileText, KeyRound, Lock } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { categoryColor } from "../lib/category-color";
 import { ItemRow } from "../components/ItemRow";
+import { RollNumber } from "../components/RollNumber";
 import type { Item } from "../lib/types";
 
 function greeting(date: Date): string {
@@ -30,23 +31,58 @@ function matchesQuery(item: Item, q: string): boolean {
   );
 }
 
-// Subtle fade + small upward slide stagger on mount.
+// Subtle fade + small upward slide stagger on mount (35ms stagger, --dur-std,
+// --ease-out). Reduced-motion swaps in fade-only variants.
 const containerVariants = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.03 } },
+  show: { transition: { staggerChildren: 0.035 } },
 };
 const childVariants = {
   hidden: { opacity: 0, y: 7 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] as const },
+    transition: { duration: 0.22, ease: [0.23, 1, 0.32, 1] as const },
   },
+};
+const childVariantsReduced = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.22 } },
 };
 
 export function Home() {
   const { items, query, reload, loading, error } = useItems();
+  const reduce = useReducedMotion();
   const now = useMemo(() => new Date(), []);
+
+  const cardVariants = reduce ? childVariantsReduced : childVariants;
+
+  // Track the most-recently-added item so its row can play a one-shot
+  // add-success highlight. We key off the newest created_at; when that id
+  // changes we mark it for a single flash, then clear it.
+  const latestId = useMemo(() => {
+    if (items.length === 0) return null;
+    return items.reduce((a, b) => (b.created_at > a.created_at ? b : a)).id;
+  }, [items]);
+
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const seenLatest = useRef<string | null>(null);
+  const firstPass = useRef(true);
+
+  useEffect(() => {
+    if (firstPass.current) {
+      // Don't flash the existing newest item on initial load.
+      firstPass.current = false;
+      seenLatest.current = latestId;
+      return;
+    }
+    if (latestId && latestId !== seenLatest.current) {
+      seenLatest.current = latestId;
+      setFlashId(latestId);
+      const t = window.setTimeout(() => setFlashId(null), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, [latestId]);
 
   const filtered = useMemo(
     () => items.filter((i) => matchesQuery(i, query)),
@@ -149,7 +185,7 @@ export function Home() {
             }}
           >
             {pinned.map((item) => (
-              <QuickCard key={item.id} item={item} />
+              <QuickCard key={item.id} item={item} variants={cardVariants} />
             ))}
           </motion.div>
         </section>
@@ -228,8 +264,12 @@ export function Home() {
                 </div>
 
                 {rows.map((item) => (
-                  <motion.div key={item.id} variants={childVariants}>
-                    <ItemRow item={item} onChanged={reload} />
+                  <motion.div key={item.id} variants={cardVariants}>
+                    <ItemRow
+                      item={item}
+                      onChanged={reload}
+                      justAdded={item.id === flashId}
+                    />
                   </motion.div>
                 ))}
               </div>
@@ -249,8 +289,10 @@ export function Home() {
             color: "var(--qb-muted2)",
           }}
         >
-          {items.length} {items.length === 1 ? "item" : "items"} · {fileCount}{" "}
-          {fileCount === 1 ? "file" : "files"} · {confidentialCount} confidential
+          <RollNumber value={items.length} />{" "}
+          {items.length === 1 ? "item" : "items"} · <RollNumber value={fileCount} />{" "}
+          {fileCount === 1 ? "file" : "files"} ·{" "}
+          <RollNumber value={confidentialCount} /> confidential
         </div>
       )}
     </div>
@@ -274,11 +316,17 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function QuickCard({ item }: { item: Item }) {
+function QuickCard({
+  item,
+  variants,
+}: {
+  item: Item;
+  variants: typeof childVariants | typeof childVariantsReduced;
+}) {
   const isText = item.kind === "Text";
   return (
     <motion.div
-      variants={childVariants}
+      variants={variants}
       style={{
         position: "relative",
         display: "flex",

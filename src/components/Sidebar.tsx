@@ -129,6 +129,7 @@ export function Sidebar() {
       {/* Add item */}
       <button
         type="button"
+        className="qb-press"
         onClick={() => setAddOpen(true)}
         style={{
           display: "flex",
@@ -172,6 +173,7 @@ export function Sidebar() {
       >
         <Link
           to="/"
+          className="qb-press"
           style={navItemBase}
           activeProps={{ style: navItemActive }}
           inactiveProps={{ style: navItemBase }}
@@ -182,6 +184,7 @@ export function Sidebar() {
         </Link>
         <Link
           to="/settings"
+          className="qb-press"
           style={navItemBase}
           activeProps={{ style: navItemActive }}
           inactiveProps={{ style: navItemBase }}

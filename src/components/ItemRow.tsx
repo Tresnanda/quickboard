@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { Check, Copy, FileText, KeyRound, Lock, Pin } from "lucide-react";
 import { fileToTemp, getTextValue, setPinned } from "../lib/ipc";
@@ -7,14 +8,27 @@ import type { Item } from "../lib/types";
 type ItemRowProps = {
   item: Item;
   onChanged: () => void | Promise<void>;
+  /** When true, the row plays a one-shot add-success highlight on mount. */
+  justAdded?: boolean;
 };
 
-export function ItemRow({ item, onChanged }: ItemRowProps) {
+const COPY_REVERT_MS = 1200;
+
+export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
+  const reduce = useReducedMotion();
   const [copied, setCopied] = useState(false);
-  const [hover, setHover] = useState(false);
   const [busy, setBusy] = useState(false);
+  const revertTimer = useRef<number | null>(null);
 
   const isText = item.kind === "Text";
+
+  useEffect(() => {
+    return () => {
+      if (revertTimer.current !== null) {
+        window.clearTimeout(revertTimer.current);
+      }
+    };
+  }, []);
 
   async function handleCopy() {
     // Plan 3: gate behind Touch ID
@@ -22,7 +36,14 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
       const value = await getTextValue(item.id);
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1100);
+      // Interruptible: a fresh click restarts the auto-revert timer.
+      if (revertTimer.current !== null) {
+        window.clearTimeout(revertTimer.current);
+      }
+      revertTimer.current = window.setTimeout(() => {
+        setCopied(false);
+        revertTimer.current = null;
+      }, COPY_REVERT_MS);
     } catch {
       /* surfaced at a higher level later; copy stays silent for now */
     }
@@ -52,14 +73,14 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
 
   return (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      className={`qb-row${justAdded ? " qb-add-flash" : ""}`}
       style={{
         display: "flex",
         alignItems: "center",
         gap: "0.875rem",
         padding: "0.625rem 0.25rem",
         borderBottom: "1px solid var(--qb-hair)",
+        borderRadius: "8px",
       }}
     >
       {/* Kind tile */}
@@ -127,8 +148,9 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
         </div>
       </div>
 
-      {/* Right actions */}
+      {/* Right actions — rest at low opacity, reveal on row hover (CSS-gated) */}
       <div
+        className="qb-row__actions"
         style={{
           display: "flex",
           alignItems: "center",
@@ -139,6 +161,7 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
         {isText ? (
           <button
             type="button"
+            className="qb-press"
             onClick={handleCopy}
             style={{
               display: "flex",
@@ -152,16 +175,15 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
               border: "1px solid var(--qb-border)",
               borderRadius: "7px",
               cursor: "pointer",
-              opacity: hover || copied ? 1 : 0.55,
-              transition: "opacity 140ms ease, color 140ms ease",
+              transition: "color 140ms var(--ease-out)",
             }}
           >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? "Copied" : "copy"}
+            <CopyMorph copied={copied} reduce={!!reduce} />
           </button>
         ) : (
           <button
             type="button"
+            className="qb-press"
             draggable
             onDragStart={handleDragStart}
             style={{
@@ -176,8 +198,6 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
               border: "1px solid var(--qb-border)",
               borderRadius: "7px",
               cursor: "grab",
-              opacity: hover ? 1 : 0.55,
-              transition: "opacity 140ms ease",
             }}
           >
             <FileText size={13} />
@@ -187,6 +207,7 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
 
         <button
           type="button"
+          className="qb-press"
           onClick={handleTogglePin}
           aria-label={item.pinned ? "Unpin" : "Pin"}
           title={item.pinned ? "Unpin" : "Pin"}
@@ -201,16 +222,74 @@ export function ItemRow({ item, onChanged }: ItemRowProps) {
             border: "1px solid transparent",
             borderRadius: "7px",
             cursor: "pointer",
-            opacity: item.pinned || hover ? 1 : 0,
-            transition: "opacity 140ms ease, color 140ms ease",
+            transition: "color 140ms var(--ease-out)",
           }}
         >
-          <Pin
-            size={14}
-            fill={item.pinned ? "var(--qb-amber)" : "none"}
-          />
+          <Pin size={14} fill={item.pinned ? "var(--qb-amber)" : "none"} />
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Copy -> Check morph: Emil's blur-masked crossfade. The whole label
+ * (icon + word) swaps between "copy"/Copy and "Copied"/Check with a short
+ * blur + opacity crossfade. Reduced motion -> instant opacity swap only.
+ */
+function CopyMorph({ copied, reduce }: { copied: boolean; reduce: boolean }) {
+  const key = copied ? "copied" : "copy";
+
+  const enter = reduce
+    ? { opacity: 0 }
+    : { opacity: 0, filter: "blur(2px)" };
+  const center = reduce
+    ? { opacity: 1 }
+    : { opacity: 1, filter: "blur(0px)" };
+  const exit = reduce
+    ? { opacity: 0 }
+    : { opacity: 0, filter: "blur(2px)" };
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+    >
+      {/* Invisible sizer keeps the button width stable across the swap. */}
+      <span
+        aria-hidden
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.375rem",
+          visibility: "hidden",
+        }}
+      >
+        <Check size={13} />
+        Copied
+      </span>
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={key}
+          initial={enter}
+          animate={center}
+          exit={exit}
+          transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+          }}
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+          {copied ? "Copied" : "copy"}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Database, FileText, Lock, Globe, Clock } from "lucide-react";
 import { useItems } from "../lib/items-store";
+import { RollNumber } from "../components/RollNumber";
 
 export function Settings() {
   const { items, loading } = useItems();
@@ -45,17 +46,17 @@ export function Settings() {
         <StatRow
           icon={<Database size={14} />}
           label="Total items"
-          value={loading ? "—" : String(items.length)}
+          value={loading ? "—" : <RollNumber value={items.length} />}
         />
         <StatRow
           icon={<FileText size={14} />}
           label="Files"
-          value={loading ? "—" : String(fileCount)}
+          value={loading ? "—" : <RollNumber value={fileCount} />}
         />
         <StatRow
           icon={<Lock size={14} />}
           label="Confidential"
-          value={loading ? "—" : String(confidentialCount)}
+          value={loading ? "—" : <RollNumber value={confidentialCount} />}
         />
         <InfoRow>Local · encrypted on this Mac</InfoRow>
       </Section>
@@ -123,7 +124,7 @@ function StatRow({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
 }) {
   return (
     <div

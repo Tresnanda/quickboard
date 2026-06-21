@@ -14,10 +14,81 @@
   --qb-green: #3a9d4e;
   --qb-blue: #3b6fd4;
   --qb-purple: #9159c9;
+
+  /* Motion identity (see docs/.../2026-06-21-quickboard-motion.md) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-morph: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-quick: 140ms;
+  --dur-std: 220ms;
+  --dur-slow: 360ms;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* --- Press feedback: scale-down on active for all pressables --- */
+.qb-press {
+  transition: transform var(--dur-quick) var(--ease-out);
+}
+.qb-press:active {
+  transform: scale(0.97);
+}
+
+/* --- ItemRow hover-reveal (hover-capable pointers only) --- */
+.qb-row {
+  transition: background var(--dur-quick) var(--ease-out);
+}
+.qb-row__actions {
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-row__actions {
+    opacity: 0.55;
+    transform: translateX(6px);
+  }
+  .qb-row:hover {
+    background: var(--qb-hair);
+  }
+  .qb-row:hover .qb-row__actions {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --- Add-success one-shot highlight (tint -> transparent) --- */
+@keyframes qb-add-flash {
+  from {
+    background: rgba(58, 157, 78, 0.16);
+  }
+  to {
+    background: transparent;
+  }
+}
+.qb-add-flash {
+  animation: qb-add-flash 600ms var(--ease-out);
+}
+
+/* --- Reduced motion: keep opacity/color, kill transform/position motion --- */
+@media (prefers-reduced-motion: reduce) {
+  .qb-press {
+    transition: none;
+  }
+  .qb-press:active {
+    transform: none;
+  }
+  .qb-row__actions {
+    transition: opacity 160ms var(--ease-out);
+    transform: none !important;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .qb-row:hover .qb-row__actions {
+      transform: none;
+    }
+  }
+  .qb-add-flash {
+    animation: none;
+  }
 }
 
 @layer base {

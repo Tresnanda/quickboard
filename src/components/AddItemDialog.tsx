@@ -1,9 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { FileText, Folder, KeyRound, Lock, X } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { addFile, addText } from "../lib/ipc";
+
+const MotionOverlay = motion.create(Dialog.Overlay);
+const MotionContent = motion.create(Dialog.Content);
 
 type ItemType = "Text" | "File";
 
@@ -38,6 +42,7 @@ function lastPathSegment(p: string): string {
 
 export function AddItemDialog() {
   const { addOpen, setAddOpen, categories, reload } = useItems();
+  const reduce = useReducedMotion();
 
   const [type, setType] = useState<ItemType>("Text");
   const [label, setLabel] = useState("");
@@ -116,41 +121,73 @@ export function AddItemDialog() {
     }
   }
 
+  // Centering is owned by Framer (it manages `transform`), so we always
+  // prepend the -50%/-50% translate and let scale ride on top of it.
+  const centerTransform = (latest: { scale?: number | string }) => {
+    const s = latest.scale ?? 1;
+    return `translate(-50%, -50%) scale(${s})`;
+  };
+
   return (
     <Dialog.Root open={addOpen} onOpenChange={handleOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(25, 25, 23, 0.32)",
-            backdropFilter: "blur(2px)",
-            zIndex: 50,
-          }}
-        />
-        <Dialog.Content
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            labelInputRef.current?.focus();
-          }}
-          aria-describedby={undefined}
-          style={{
-            position: "fixed",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "min(440px, calc(100vw - 2rem))",
-            maxHeight: "calc(100vh - 2rem)",
-            overflowY: "auto",
-            background: "var(--qb-bg)",
-            border: "1px solid var(--qb-border)",
-            borderRadius: "14px",
-            boxShadow: "0 18px 48px rgba(25, 25, 23, 0.16)",
-            padding: "1.25rem",
-            zIndex: 51,
-            fontFamily: "inherit",
-          }}
-        >
+      <AnimatePresence>
+        {addOpen && (
+          <Dialog.Portal forceMount>
+            <MotionOverlay
+              forceMount
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(25, 25, 23, 0.32)",
+                backdropFilter: "blur(2px)",
+                zIndex: 50,
+              }}
+            />
+            <MotionContent
+              forceMount
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                labelInputRef.current?.focus();
+              }}
+              aria-describedby={undefined}
+              initial={
+                reduce
+                  ? { opacity: 0, scale: 1 }
+                  : { opacity: 0, scale: 0.96, filter: "blur(4px)" }
+              }
+              animate={
+                reduce
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: 1, scale: 1, filter: "blur(0px)" }
+              }
+              exit={
+                reduce
+                  ? { opacity: 0, scale: 1 }
+                  : { opacity: 0, scale: 0.96, filter: "blur(2px)" }
+              }
+              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              transformTemplate={centerTransform}
+              style={{
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transformOrigin: "center",
+                width: "min(440px, calc(100vw - 2rem))",
+                maxHeight: "calc(100vh - 2rem)",
+                overflowY: "auto",
+                background: "var(--qb-bg)",
+                border: "1px solid var(--qb-border)",
+                borderRadius: "14px",
+                boxShadow: "0 18px 48px rgba(25, 25, 23, 0.16)",
+                padding: "1.25rem",
+                zIndex: 51,
+                fontFamily: "inherit",
+              }}
+            >
           <div
             style={{
               display: "flex",
@@ -183,6 +220,7 @@ export function AddItemDialog() {
             </div>
             <Dialog.Close
               aria-label="Close"
+              className="qb-press"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -243,6 +281,7 @@ export function AddItemDialog() {
                     <button
                       key={t}
                       type="button"
+                      className="qb-press"
                       role="radio"
                       aria-checked={active}
                       onClick={() => {
@@ -306,6 +345,7 @@ export function AddItemDialog() {
                 <span style={fieldLabel}>File</span>
                 <button
                   type="button"
+                  className="qb-press"
                   onClick={handleChooseFile}
                   style={{
                     display: "flex",
@@ -379,6 +419,7 @@ export function AddItemDialog() {
             {/* Confidential switch */}
             <button
               type="button"
+              className="qb-press"
               role="switch"
               aria-checked={confidential}
               onClick={() => setConfidential((v) => !v)}
@@ -471,6 +512,7 @@ export function AddItemDialog() {
             >
               <Dialog.Close
                 type="button"
+                className="qb-press"
                 style={{
                   padding: "0.5rem 0.85rem",
                   fontSize: "0.8125rem",
@@ -487,6 +529,7 @@ export function AddItemDialog() {
               </Dialog.Close>
               <button
                 type="submit"
+                className="qb-press"
                 disabled={!valid || submitting}
                 style={{
                   padding: "0.5rem 0.95rem",
@@ -507,8 +550,10 @@ export function AddItemDialog() {
               </button>
             </div>
           </form>
-        </Dialog.Content>
-      </Dialog.Portal>
+            </MotionContent>
+          </Dialog.Portal>
+        )}
+      </AnimatePresence>
     </Dialog.Root>
   );
 }
