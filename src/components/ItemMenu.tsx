@@ -77,7 +77,7 @@ export function ItemMenu({ item, onChanged }: ItemMenuProps) {
           variant="ghost"
           size="icon"
           aria-label="More actions"
-          className="qb-press qb-menu-trigger h-[30px] w-[30px] text-muted-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
+          className="qb-press qb-hit qb-menu-trigger h-[30px] w-[30px] text-muted-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
         >
           <MoreHorizontal size={16} />
         </Button>

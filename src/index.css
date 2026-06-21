@@ -81,10 +81,25 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Tabular numerals app-wide for any dynamic count / badge / slot-text value,
+   so digits don't jitter as they change. */
+.qb-num,
+.qb-count,
+kbd {
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Window dragging (titleBarStyle: Overlay) ---
-   The canvas margins/gaps and the sidebar brand/empty top area are draggable;
-   EVERY interactive element opts out with .qb-no-drag so clicks/typing work and
-   the window can still be moved by grabbing the chrome. */
+   The real fix combines THREE things:
+     1. window permissions in capabilities/default.json
+        (core:window:default + core:window:allow-start-dragging)
+     2. `data-tauri-drag-region` on the drag bands (canvas margins + the
+        sidebar brand band) — set in AppShell.tsx / Sidebar.tsx
+     3. the mousedown target itself must carry the attribute, so non-interactive
+        children inside a drag band get `pointer-events: none` (.qb-drag-passthrough)
+        and interactive controls keep `pointer-events: auto` and are NOT drag regions.
+   We also keep the CSS -webkit-app-region hints as a belt-and-suspenders for the
+   Overlay titlebar; both can coexist. */
 .qb-drag {
   -webkit-app-region: drag;
   app-region: drag;
@@ -93,13 +108,18 @@
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+/* Non-interactive children inside a data-tauri-drag-region band: let the
+   mousedown fall through to the draggable parent so dragging always starts. */
+.qb-drag-passthrough {
+  pointer-events: none;
+}
 
 /* --- Press feedback: scale-down on active for all pressables --- */
 .qb-press {
   transition: transform var(--dur-quick) var(--ease-out);
 }
 .qb-press:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* --- Light sidebar nav / category hover (only on non-active rows) ---
@@ -223,6 +243,162 @@
   padding: 0.05rem 0.4rem;
 }
 
+/* --- Expandable category groups: tree connector + sub-rows (#33 style) ---
+   A thin vertical connector runs down the left of an expanded group; each
+   sub-row gets a short horizontal branch tick. The selected sub-row paints an
+   elevated white pill. */
+.qb-tree {
+  position: relative;
+  margin: 0.1rem 0 0.2rem;
+  padding-left: 1.55rem;
+}
+/* The vertical line. Stops short of the last tick for a tidy terminal. */
+.qb-tree::before {
+  content: "";
+  position: absolute;
+  left: 1.05rem;
+  top: 0;
+  bottom: 0.55rem;
+  width: 1.5px;
+  background: var(--hair);
+  border-radius: 1px;
+}
+.qb-subrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 30px;
+  padding: 0.32rem 0.55rem;
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: #5a5a56;
+  font-family: inherit;
+  font-size: 0.785rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+/* Branch tick: a short horizontal line from the trunk to the row. */
+.qb-subrow::before {
+  content: "";
+  position: absolute;
+  left: -0.5rem;
+  top: 50%;
+  width: 0.5rem;
+  height: 1.5px;
+  background: var(--hair);
+  transform: translateY(-50%);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-subrow[aria-current="false"]:hover {
+    background: rgba(11, 11, 12, 0.04);
+    color: var(--ink);
+  }
+}
+.qb-subrow[aria-current="true"] {
+  color: var(--ink);
+  font-weight: 700;
+  background: var(--side-elev);
+  box-shadow: var(--shadow-pill);
+}
+
+/* Category group trigger: ≥40px hit area, chevron + count badge. */
+.qb-cat-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 34px;
+  padding: 0.4rem 0.55rem;
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: #5a5a56;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-cat-trigger:hover {
+    background: rgba(11, 11, 12, 0.04);
+    color: var(--ink);
+  }
+}
+.qb-cat-trigger[data-active="true"] {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* Small rounded-square count badge (neutral by default; amber only where it
+   matters, e.g. a confidential count). */
+.qb-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.32rem;
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  background: var(--hair);
+  color: #74746f;
+}
+.qb-badge--amber {
+  background: #fef0d9;
+  color: #b45309;
+}
+
+/* Chevron wrapper: ≥40px hit area via padding; rotates on expand. */
+.qb-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #b0b0ab;
+  transition: transform var(--dur-std) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
+}
+.qb-chevron[data-expanded="true"] {
+  transform: rotate(180deg);
+  color: #74746f;
+}
+
+/* Small icon buttons: guarantee a ≥40px hit target without enlarging the glyph,
+   using a centered pseudo-element. Apply to copy/⋯/chevron/switcher triggers. */
+.qb-hit {
+  position: relative;
+}
+.qb-hit::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+}
+
+/* Image / dither / cover outlines (light mode): a subtle pure-black low-opacity
+   outline so they don't float borderless on white. */
+.qb-img-outline {
+  outline: 1px solid rgba(0, 0, 0, 0.1);
+  outline-offset: -1px;
+}
+
 /* --- Add-success one-shot highlight (tint -> transparent) --- */
 @keyframes qb-add-flash {
   from {
@@ -323,10 +499,28 @@
   * {
     @apply border-border;
   }
+  html,
+  body {
+    /* Crisper text rendering on macOS (lighter, more even stems). */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     color: var(--qb-ink);
     /* The thin neutral canvas shows through the two-card shell's gaps/margins. */
     background: var(--canvas);
+    /* Tasteful body wrapping (avoids orphans / ragged lines). */
+    text-wrap: pretty;
+  }
+  /* Balance multi-word headings so line lengths even out. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* Subtitles / paragraph bodies prefer pretty wrapping. */
+  p {
+    text-wrap: pretty;
   }
 }

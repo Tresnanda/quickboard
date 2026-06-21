@@ -88,8 +88,17 @@ const MORPH_TRANSITION = {
 };
 
 export function Home() {
-  const { items, query, reload, loading, error, categoryFilter, setCategoryFilter } =
-    useItems();
+  const {
+    items,
+    query,
+    reload,
+    loading,
+    error,
+    categoryFilter,
+    setCategoryFilter,
+    selectedItemId,
+    setSelectedItemId,
+  } = useItems();
   const reduce = useReducedMotion();
   const now = useMemo(() => new Date(), []);
 
@@ -124,6 +133,29 @@ export function Home() {
       return () => window.clearTimeout(t);
     }
   }, [latestId]);
+
+  // Sidebar sub-item click sets `selectedItemId`: scroll the matching row into
+  // view and flash it, then clear the one-shot selection.
+  useEffect(() => {
+    if (!selectedItemId) return;
+    const el = document.querySelector<HTMLElement>(
+      `[data-item-id="${CSS.escape(selectedItemId)}"]`,
+    );
+    if (el) {
+      el.scrollIntoView({
+        behavior: reduce ? "auto" : "smooth",
+        block: "center",
+      });
+    }
+    setFlashId(selectedItemId);
+    const clear = window.setTimeout(() => setFlashId(null), 900);
+    const release = window.setTimeout(() => setSelectedItemId(null), 1000);
+    return () => {
+      window.clearTimeout(clear);
+      window.clearTimeout(release);
+    };
+    // Runs when the sidebar selects an item; the row carries a data-item-id.
+  }, [selectedItemId, reduce, setSelectedItemId]);
 
   // Client-side filter (search + category + kind chip) then sort.
   const filtered = useMemo(() => {
@@ -202,6 +234,7 @@ export function Home() {
             })()}
           </h1>
           <p
+            className="tabular"
             style={{
               fontSize: "0.875rem",
               color: "var(--muted)",
@@ -262,7 +295,8 @@ export function Home() {
                   color: active ? "var(--ink)" : "var(--muted)",
                   background: active ? "#ffffff" : "transparent",
                   border: "none",
-                  borderRadius: "7px",
+                  // Concentric: inner radius = outer (9px) − padding (3px) = 6px.
+                  borderRadius: "6px",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   letterSpacing: "-0.01em",
@@ -490,6 +524,7 @@ export function Home() {
                   {rows.map((item) => (
                     <motion.div
                       key={item.id}
+                      data-item-id={item.id}
                       // Shared id with the Quick-access card: pin toggle morphs
                       // this row into / out of the grid. `layout` also drives the
                       // FLIP reflow when the search filter changes the visible set.
@@ -603,14 +638,15 @@ function EmptyState({
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      {/* Real ordered-Bayer-dither illustration (ink-first, monochrome). */}
+      {/* Real ordered-Bayer-dither illustration (ink-first, monochrome).
+          Subtle pure-black low-opacity outline keeps the image from floating. */}
       <div
+        className="qb-img-outline"
         style={{
           width: "132px",
           height: "132px",
           borderRadius: "22px",
           overflow: "hidden",
-          border: "1px solid var(--border)",
           background: "#fafafa",
         }}
       >

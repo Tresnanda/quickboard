@@ -23,11 +23,17 @@ export function CopyMorph({
 }) {
   const key = copied ? "copied" : "copy";
 
-  const enter = reduce ? { opacity: 0 } : { opacity: 0, filter: "blur(2px)" };
+  // Animated icon swap (copy -> check): cross-fade with opacity + scale(0.25->1)
+  // + blur(4->0), spring {duration: 0.3, bounce: 0}. Reduced motion -> opacity.
+  const enter = reduce
+    ? { opacity: 0 }
+    : { opacity: 0, scale: 0.25, filter: "blur(4px)" };
   const center = reduce
     ? { opacity: 1 }
-    : { opacity: 1, filter: "blur(0px)" };
-  const exit = reduce ? { opacity: 0 } : { opacity: 0, filter: "blur(2px)" };
+    : { opacity: 1, scale: 1, filter: "blur(0px)" };
+  const exit = reduce
+    ? { opacity: 0 }
+    : { opacity: 0, scale: 0.25, filter: "blur(4px)" };
 
   return (
     <span
@@ -56,7 +62,11 @@ export function CopyMorph({
           initial={enter}
           animate={center}
           exit={exit}
-          transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+          transition={
+            reduce
+              ? { duration: 0.16 }
+              : { type: "spring", duration: 0.3, bounce: 0 }
+          }
           style={{
             position: "absolute",
             inset: 0,

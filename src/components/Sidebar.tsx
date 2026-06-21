@@ -1,7 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+import {
+  ChevronDown,
   ChevronsUpDown,
   Inbox,
   LayoutGrid,
@@ -11,6 +17,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useItems } from "../lib/items-store";
+import type { Item } from "../lib/types";
 import { Button } from "./ui/button";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -125,8 +132,12 @@ export function Sidebar() {
     setAddOpen,
     categoryFilter,
     setCategoryFilter,
+    setSelectedItemId,
   } = useItems();
   const reduce = !!useReducedMotion();
+
+  // Which category groups are expanded (the active filtered one starts open).
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   // Active route drives which link hosts the sliding indicator.
   const pathname = useRouterState({
@@ -140,18 +151,30 @@ export function Sidebar() {
   const homeActive = onHome && categoryFilter === null;
   const allItemsActive = onHome && categoryFilter === null;
 
-  const counts = useMemo(() => {
-    const map = new Map<string, number>();
+  // Items grouped by category (for the expandable sub-rows + counts).
+  const byCategory = useMemo(() => {
+    const map = new Map<string, Item[]>();
     for (const item of items) {
-      map.set(item.category, (map.get(item.category) ?? 0) + 1);
+      const list = map.get(item.category) ?? [];
+      list.push(item);
+      map.set(item.category, list);
     }
     return map;
   }, [items]);
 
+  function toggleCategory(name: string) {
+    setExpanded((prev) => ({ ...prev, [name]: !prev[name] }));
+  }
+
+  function openItem(category: string, id: string) {
+    setCategoryFilter(category);
+    setSelectedItemId(id);
+  }
+
   return (
     <aside
-      // The sidebar card; the brand/empty top band is draggable (.qb-drag),
-      // interactive children opt back out individually.
+      // The sidebar card; the brand/empty top band is the drag handle.
+      // Interactive children opt back out individually (.qb-no-drag).
       style={{
         width: "244px",
         minWidth: "244px",
@@ -168,18 +191,25 @@ export function Sidebar() {
         color: "var(--side-fg)",
       }}
     >
-      {/* Brand — draggable band (lets you grab the window near the title). */}
+      {/* Brand — GENEROUS drag band. data-tauri-drag-region makes the whole
+          band a window-drag handle; the non-interactive logo/brand carry
+          pointer-events:none (.qb-drag-passthrough) so the mousedown lands on
+          the band itself and dragging always starts. */}
       <div
+        data-tauri-drag-region
         className="qb-drag"
         style={{
           display: "flex",
           alignItems: "center",
           gap: "0.625rem",
-          padding: "0.25rem 0.4rem 0.95rem",
+          padding: "0.55rem 0.4rem 0.95rem",
         }}
       >
-        <LogoMark />
+        <span className="qb-drag-passthrough" style={{ display: "inline-flex" }}>
+          <LogoMark />
+        </span>
         <span
+          className="qb-drag-passthrough"
           style={{
             fontWeight: 800,
             fontSize: "1rem",
@@ -190,6 +220,7 @@ export function Sidebar() {
           quickboard
         </span>
         <span
+          className="qb-drag-passthrough"
           style={{
             fontSize: "0.59rem",
             fontWeight: 700,
@@ -212,10 +243,12 @@ export function Sidebar() {
           alignItems: "center",
           gap: "0.55rem",
           padding: "0.55rem 0.7rem",
-          border: "1px solid var(--border)",
-          borderRadius: "10px",
           background: "#ffffff",
+          borderRadius: "10px",
           marginBottom: "0.7rem",
+          // Seam via soft layered shadow (shadows over hard borders).
+          boxShadow:
+            "0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04)",
         }}
       >
         <Search size={15} color="var(--faint)" style={{ flexShrink: 0 }} />
@@ -299,12 +332,8 @@ export function Sidebar() {
               <Inbox size={16} />
               All items
               <span
-                className="tabular"
-                style={{
-                  marginLeft: "auto",
-                  fontSize: "0.75rem",
-                  color: "var(--faint)",
-                }}
+                className="qb-badge"
+                style={{ marginLeft: "auto" }}
               >
                 {items.length}
               </span>
@@ -326,7 +355,7 @@ export function Sidebar() {
         </nav>
       </LayoutGroup>
 
-      {/* CATEGORIES — clickable filters */}
+      {/* CATEGORIES — expandable groups (#33). */}
       <SectionLabel>Categories</SectionLabel>
       <div
         className="qb-no-drag"
@@ -351,62 +380,24 @@ export function Sidebar() {
           </div>
         ) : (
           categories.map((name) => {
-            const active = categoryFilter === name;
+            const rows = byCategory.get(name) ?? [];
+            const count = rows.length;
+            const confidentialCount = rows.filter((r) => r.confidential).length;
+            const isOpen = !!expanded[name];
+            const filterActive = categoryFilter === name;
             return (
-              <button
+              <CategoryGroup
                 key={name}
-                type="button"
-                className="qb-press qb-side-cat"
-                aria-pressed={active}
-                onClick={() => setCategoryFilter(active ? null : name)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.6rem",
-                  padding: "0.45rem 0.7rem",
-                  borderRadius: "var(--r-pill)",
-                  fontSize: "0.8125rem",
-                  fontWeight: active ? 700 : 500,
-                  color: active ? "var(--ink)" : "#5a5a56",
-                  background: active ? "var(--side-elev)" : "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  textAlign: "left",
-                  width: "100%",
-                  boxShadow: active ? "var(--shadow-pill)" : "none",
-                }}
-              >
-                <span
-                  style={{
-                    width: "7px",
-                    height: "7px",
-                    borderRadius: "50%",
-                    background: "#b6b6b1",
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {name}
-                </span>
-                <span
-                  className="tabular"
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "var(--faint)",
-                  }}
-                >
-                  {counts.get(name) ?? 0}
-                </span>
-              </button>
+                name={name}
+                rows={rows}
+                count={count}
+                confidentialCount={confidentialCount}
+                isOpen={isOpen}
+                filterActive={filterActive}
+                reduce={reduce}
+                onToggle={() => toggleCategory(name)}
+                onPickItem={(id) => openItem(name, id)}
+              />
             );
           })
         )}
@@ -479,20 +470,22 @@ export function Sidebar() {
           Local · encrypted
         </div>
         {/* Refined account row — gradient avatar + identity + switcher, in a
-            bordered white pill. */}
+            white pill with a soft layered seam (shadow over hard border). */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: "0.6rem",
             padding: "0.45rem 0.55rem",
-            border: "1px solid var(--border)",
             background: "#ffffff",
             borderRadius: "11px",
+            boxShadow:
+              "0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04)",
           }}
         >
           <span
             aria-hidden="true"
+            className="qb-img-outline"
             style={{
               width: "30px",
               height: "30px",
@@ -523,10 +516,172 @@ export function Sidebar() {
               Local on this Mac
             </div>
           </div>
-          <ChevronsUpDown size={15} color="#b0b0b2" style={{ flexShrink: 0 }} />
+          <button
+            type="button"
+            aria-label="Switch account"
+            className="qb-press qb-hit"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: "pointer",
+              color: "#b0b0b2",
+            }}
+          >
+            <ChevronsUpDown size={15} />
+          </button>
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * One expandable category group: a trigger row (dot + name + chevron + count
+ * badge) and, when expanded, a tree-connected list of its items. The selected
+ * sub-item paints an elevated white pill.
+ */
+function CategoryGroup({
+  name,
+  rows,
+  count,
+  confidentialCount,
+  isOpen,
+  filterActive,
+  reduce,
+  onToggle,
+  onPickItem,
+}: {
+  name: string;
+  rows: Item[];
+  count: number;
+  confidentialCount: number;
+  isOpen: boolean;
+  filterActive: boolean;
+  reduce: boolean;
+  onToggle: () => void;
+  onPickItem: (id: string) => void;
+}) {
+  const { selectedItemId } = useItems();
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="qb-press qb-cat-trigger"
+        data-active={filterActive ? "true" : "false"}
+        aria-expanded={isOpen}
+        onClick={onToggle}
+      >
+        <span
+          style={{
+            width: "7px",
+            height: "7px",
+            borderRadius: "50%",
+            background: "#b6b6b1",
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {name}
+        </span>
+        {/* Confidential count gets an amber badge (color where it matters);
+            otherwise a neutral gray count badge. */}
+        {confidentialCount > 0 && (
+          <span
+            className="qb-badge qb-badge--amber"
+            title={`${confidentialCount} confidential`}
+          >
+            {confidentialCount}
+          </span>
+        )}
+        <span className="qb-badge">{count}</span>
+        <span
+          className="qb-chevron qb-hit"
+          data-expanded={isOpen ? "true" : "false"}
+          aria-hidden="true"
+        >
+          <ChevronDown size={14} />
+        </span>
+      </button>
+
+      {/* Expand / collapse — height + opacity, interruptible, reduced-motion
+          aware (instant when reduced). */}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="sub"
+            initial={reduce ? { opacity: 1, height: "auto" } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={reduce ? { opacity: 1, height: 0 } : { opacity: 0, height: 0 }}
+            transition={
+              reduce
+                ? { duration: 0 }
+                : { duration: 0.26, ease: EASE_OUT }
+            }
+            style={{ overflow: "hidden" }}
+          >
+            <div className="qb-tree">
+              {rows.length === 0 ? (
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--faint)",
+                    padding: "0.3rem 0.55rem",
+                  }}
+                >
+                  Empty
+                </div>
+              ) : (
+                rows.map((item) => {
+                  const selected = selectedItemId === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="qb-press qb-subrow"
+                      aria-current={selected ? "true" : "false"}
+                      onClick={() => onPickItem(item.id)}
+                    >
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {item.label}
+                      </span>
+                      {item.confidential && (
+                        <Lock
+                          size={11}
+                          color="#b45309"
+                          style={{ flexShrink: 0 }}
+                        />
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

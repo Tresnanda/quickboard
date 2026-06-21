@@ -17,6 +17,9 @@ type ItemsState = {
   setQuery: (q: string) => void;
   categoryFilter: string | null;
   setCategoryFilter: (category: string | null) => void;
+  /** Item the sidebar asked Home to scroll to / highlight (one-shot). */
+  selectedItemId: string | null;
+  setSelectedItemId: (id: string | null) => void;
   addOpen: boolean;
   setAddOpen: (open: boolean) => void;
   reload: () => Promise<void>;
@@ -31,6 +34,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,13 +68,25 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       setQuery,
       categoryFilter,
       setCategoryFilter,
+      selectedItemId,
+      setSelectedItemId,
       addOpen,
       setAddOpen,
       reload,
       loading,
       error,
     }),
-    [items, categories, query, categoryFilter, addOpen, reload, loading, error],
+    [
+      items,
+      categories,
+      query,
+      categoryFilter,
+      selectedItemId,
+      addOpen,
+      reload,
+      loading,
+      error,
+    ],
   );
 
   return <ItemsContext.Provider value={value}>{children}</ItemsContext.Provider>;

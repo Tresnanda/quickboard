@@ -18,8 +18,11 @@ import { AddItemDialog } from "./AddItemDialog";
 export function AppShell() {
   return (
     <div
-      // The entire canvas (incl. the ~8px margin + the gap) is draggable. The
+      // The entire canvas (incl. the ~8px margin + the gap) is draggable. We
+      // use BOTH data-tauri-drag-region (the real fix, paired with the window
+      // permissions + start-dragging) and the -webkit-app-region CSS hint. The
       // cards' interiors re-enable interaction via .qb-no-drag.
+      data-tauri-drag-region
       className="qb-drag"
       style={{
         position: "relative",
