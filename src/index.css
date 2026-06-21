@@ -511,14 +511,6 @@ kbd {
   outline-offset: -1px;
 }
 
-/* --- Editorial serif: brand-moment headlines ONLY (minting sheet + empty
-   state). Everything else stays Plus Jakarta Sans. --- */
-.font-serif-brand {
-  font-family: "Fraunces", Georgia, "Times New Roman", serif;
-  font-optical-sizing: auto;
-  letter-spacing: -0.01em;
-}
-
 /* --- Unified control toolbar (sort segmented · divider · filter pills) ---
    One rounded #fafafa container with depth — not loose floating chips. */
 .qb-toolbar {

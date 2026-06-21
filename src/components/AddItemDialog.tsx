@@ -44,7 +44,7 @@ function previewValue(raw: string): string {
  *    combobox, Confidential switch) + the "Mint item" submit.
  *  - RIGHT = a LIVE PREVIEW item card that updates as you type — the item's
  *    MONOCHROME `DitherArt` seal, label, a category pill, a value preview — plus
- *    a gradient-shader brand art band with a small serif "quickboard" wordmark.
+ *    a gradient-shader brand art band with a small "quickboard" wordmark.
  *
  * The slide-up / slide-down is shadcn's data-state Tailwind animation (mounts +
  * unmounts reliably, driven by the `open` prop). NO Framer Motion here.
@@ -165,7 +165,7 @@ export function AddItemDialog() {
           {/* ── LEFT: the form ── */}
           <div className="order-2 md:order-1">
             <SheetHeader className="space-y-1 px-5 pb-1 pt-3 text-left">
-              <SheetTitle className="font-serif-brand text-[1.375rem] font-semibold text-[var(--ink)]">
+              <SheetTitle className="text-[1.375rem] font-extrabold tracking-[-0.02em] text-[var(--ink)]">
                 Mint a new item
               </SheetTitle>
               <SheetDescription id={`${datalistId}-desc`} className="text-xs">
@@ -332,8 +332,15 @@ export function AddItemDialog() {
                 </Button>
                 <Button
                   type="submit"
-                  className="qb-press flex-1"
                   disabled={!valid || submitting}
+                  className={cn(
+                    "qb-press flex-1 font-semibold",
+                    // Ink-first primary: near-black fill, white text.
+                    "bg-[var(--ink)] text-white hover:bg-[var(--ink)]/90",
+                    // Elegant disabled: light neutral surface + muted text,
+                    // NOT a flat dimmed-ink mid-gray.
+                    "disabled:bg-[var(--hair)] disabled:text-[var(--faint)] disabled:opacity-100 disabled:shadow-none",
+                  )}
                 >
                   {submitting ? "Minting…" : "Mint item"}
                 </Button>
@@ -341,83 +348,82 @@ export function AddItemDialog() {
             </form>
           </div>
 
-          {/* ── RIGHT: live preview + gradient brand band ── */}
-          <aside
-            aria-hidden="true"
-            className="order-1 flex flex-col gap-3 border-b border-border bg-[#fafafa] p-5 md:order-2 md:border-b-0 md:border-l"
-          >
-            {/* Gradient-shader brand accent strip (the ONLY colour here). */}
-            <GradientBrand height={92} radius="16px" />
-
-            <div className="text-[0.625rem] font-bold uppercase tracking-[0.08em] text-[var(--faint)]">
-              Live preview
-            </div>
-
-            {/* LIVE item card — mirrors a Library row / quick card. MONOCHROME. */}
-            <div
-              className="qb-quick-card flex flex-col gap-3 rounded-[var(--r-card)] bg-white p-3.5"
-              style={{ boxShadow: "var(--shadow-depth)" }}
+          {/* ── RIGHT: FULL-PANEL gradient brand background with a floating
+              live-preview card + tagline. The gradient is the ONLY colour. ── */}
+          <aside className="order-1 md:order-2">
+            <GradientBrand
+              fill
+              radius="0px"
+              wordmarkPlacement="top-left"
+              className="flex min-h-[260px] flex-col items-center justify-center gap-5 px-6 py-9 md:min-h-full md:rounded-r-[24px]"
             >
-              <div className="flex items-start justify-between gap-2">
-                <span
-                  className="qb-tile relative flex h-[38px] w-[38px] items-center justify-center overflow-hidden rounded-[var(--r-tile)] text-[var(--ink)]"
-                  style={{
-                    background: confidential
-                      ? "rgba(11,11,12,0.06)"
-                      : "var(--hair)",
-                  }}
-                >
-                  {/* MONOCHROME seeded dither seal — NEVER the gradient. */}
-                  <DitherArt
-                    width={38}
-                    height={38}
-                    density={0.95}
-                    seed={seedLabel}
+              {/* LIVE item card — floats centered on the gradient. MONOCHROME. */}
+              <div
+                aria-hidden="true"
+                className="flex w-full max-w-[256px] flex-col gap-3 rounded-[var(--r-card)] bg-white p-3.5"
+                style={{ boxShadow: "0 18px 40px -16px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.12)" }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className="qb-tile relative flex h-[38px] w-[38px] items-center justify-center overflow-hidden rounded-[var(--r-tile)] text-[var(--ink)]"
                     style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "38px",
-                      height: "38px",
-                      opacity: 0.32,
+                      background: confidential
+                        ? "rgba(11,11,12,0.06)"
+                        : "var(--hair)",
                     }}
-                  />
-                  <span className="relative z-[1]">
-                    {confidential ? (
-                      <Lock size={16} />
-                    ) : type === "File" ? (
-                      <FileText size={16} />
-                    ) : (
-                      <KeyRound size={16} />
-                    )}
+                  >
+                    {/* MONOCHROME seeded dither seal — NEVER the gradient. */}
+                    <DitherArt
+                      width={38}
+                      height={38}
+                      density={0.95}
+                      seed={seedLabel}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "38px",
+                        height: "38px",
+                        opacity: 0.32,
+                      }}
+                    />
+                    <span className="relative z-[1]">
+                      {confidential ? (
+                        <Lock size={16} />
+                      ) : type === "File" ? (
+                        <FileText size={16} />
+                      ) : (
+                        <KeyRound size={16} />
+                      )}
+                    </span>
                   </span>
-                </span>
-                {/* Category pill */}
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[0.6875rem] font-semibold text-[var(--text)] shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
-                  <span className="h-[6px] w-[6px] rounded-full bg-[var(--faint)]" />
-                  {previewCategory}
-                </span>
+                  {/* Category pill */}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[0.6875rem] font-semibold text-[var(--text)] shadow-[0_0_0_1px_rgba(0,0,0,0.06)]">
+                    <span className="h-[6px] w-[6px] rounded-full bg-[var(--faint)]" />
+                    {previewCategory}
+                  </span>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="truncate text-[0.9375rem] font-bold tracking-[-0.015em] text-[var(--ink)]">
+                    {previewLabel}
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-0.5 truncate text-xs text-[var(--muted)]",
+                      type === "Text" && !confidential && trimmedValue
+                        ? "tabular font-mono"
+                        : undefined,
+                    )}
+                  >
+                    {previewMeta}
+                  </div>
+                </div>
               </div>
 
-              <div className="min-w-0">
-                <div className="truncate text-[0.9375rem] font-bold tracking-[-0.015em] text-[var(--ink)]">
-                  {previewLabel}
-                </div>
-                <div
-                  className={cn(
-                    "mt-0.5 truncate text-xs text-[var(--muted)]",
-                    type === "Text" && !confidential && trimmedValue
-                      ? "tabular font-mono"
-                      : undefined,
-                  )}
-                >
-                  {previewMeta}
-                </div>
-              </div>
-            </div>
-
-            <p className="font-serif-brand text-[0.8125rem] leading-snug text-[var(--muted)]">
-              A clipboard of yourself — one keystroke away.
-            </p>
+              <p className="max-w-[256px] text-center text-[0.8125rem] font-medium leading-snug tracking-[-0.01em] text-white/95 [text-shadow:0_1px_8px_rgba(0,0,0,0.35)]">
+                A clipboard of yourself — one keystroke away.
+              </p>
+            </GradientBrand>
           </aside>
         </div>
       </SheetContent>

@@ -570,7 +570,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 /**
  * Empty-state panel — a brand moment. A gradient-shader panel (the ONLY place
- * the gradient appears, alongside the minting sheet) + a serif headline.
+ * the gradient appears, alongside the minting sheet) + a Plus Jakarta headline.
  */
 function EmptyState({
   title,
@@ -603,11 +603,11 @@ function EmptyState({
 
       <div style={{ maxWidth: "24rem" }}>
         <div
-          className="font-serif-brand"
           style={{
             fontSize: "1.375rem",
-            fontWeight: 600,
+            fontWeight: 700,
             color: "var(--ink)",
+            letterSpacing: "-0.02em",
           }}
         >
           {title}
@@ -735,13 +735,9 @@ function CategoryGroup({
           >
             <div className="qb-group">
               {rows.map((item) => (
-                <motion.div
+                <div
                   key={item.id}
                   data-item-id={item.id}
-                  layoutId={reduce ? undefined : item.id}
-                  layout={reduce ? false : "position"}
-                  variants={cardVariants}
-                  transition={MORPH_TRANSITION}
                   style={{ position: "relative" }}
                 >
                   <ItemRow
@@ -749,7 +745,7 @@ function CategoryGroup({
                     onChanged={onChanged}
                     justAdded={item.id === flashId}
                   />
-                </motion.div>
+                </div>
               ))}
             </div>
           </motion.div>
