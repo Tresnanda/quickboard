@@ -1,6 +1,9 @@
 // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
 mod confidential;
 
+// Plan 2, Task 4: AES-256-GCM crypto core.
+pub mod crypto;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
