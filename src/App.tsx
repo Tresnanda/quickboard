@@ -9,6 +9,9 @@ function App() {
   const [iconPath, setIconPath] = useState<string>("");
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string>("");
+  // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
+  const [bioStatus, setBioStatus] = useState<string>("idle");
+  const [bioError, setBioError] = useState<string>("");
 
   // Resolve the absolute paths of the file to drag + the drag-preview icon.
   useEffect(() => {
@@ -35,6 +38,20 @@ function App() {
     } catch (err) {
       setError(String(err));
       setStatus("error");
+    }
+  }
+
+  // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
+  // Invokes the Rust round-trip; the keychain READ should trigger Touch ID.
+  async function handleTestTouchId() {
+    setBioError("");
+    setBioStatus("invoking… (expect a Touch ID prompt)");
+    try {
+      const ok = await invoke<boolean>("spike_biometric");
+      setBioStatus(`result: ${ok}`);
+    } catch (err) {
+      setBioError(String(err));
+      setBioStatus("error");
     }
   }
 
@@ -79,6 +96,38 @@ function App() {
 
       {error && (
         <p style={{ color: "crimson", marginTop: 16 }}>error: {error}</p>
+      )}
+
+      {/* SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2. */}
+      <hr style={{ margin: "32px 0", border: "none", borderTop: "1px solid #ddd" }} />
+      <h2 style={{ fontSize: 18 }}>Touch ID keychain SPIKE</h2>
+      <p style={{ color: "#666", fontSize: 13 }}>
+        SPIKE: stores a user-presence-gated secret in the macOS keychain and reads
+        it back. The read should trigger a Touch ID prompt. Removed in Plan 2.
+      </p>
+      <button
+        type="button"
+        onClick={handleTestTouchId}
+        style={{
+          marginTop: 12,
+          padding: "12px 24px",
+          border: "2px solid #059669",
+          borderRadius: 10,
+          background: "#ecfdf5",
+          color: "#059669",
+          fontSize: 16,
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        Test Touch ID
+      </button>
+      <dl style={{ marginTop: 16, fontSize: 13, color: "#444" }}>
+        <dt style={{ fontWeight: 600 }}>biometric status</dt>
+        <dd style={{ margin: 0 }}>{bioStatus}</dd>
+      </dl>
+      {bioError && (
+        <p style={{ color: "crimson", marginTop: 12 }}>error: {bioError}</p>
       )}
     </main>
   );

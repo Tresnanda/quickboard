@@ -1,7 +1,19 @@
+// SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
+mod confidential;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+// SPIKE: throwaway, removed/replaced in Plan 2.
+// Stores a user-presence-gated secret in the macOS keychain and reads it back.
+// The read is expected to trigger a Touch ID prompt. Returns Ok(true) on a
+// matching round-trip, or a String error.
+#[tauri::command]
+fn spike_biometric() -> Result<bool, String> {
+    confidential::biometric_roundtrip()
 }
 
 // SPIKE: throwaway drag-out test, removed in Plan 2.
@@ -35,7 +47,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // SPIKE: throwaway drag-out test, removed in Plan 2
         .plugin(tauri_plugin_drag::init())
-        .invoke_handler(tauri::generate_handler![greet, spike_drag_paths])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            spike_drag_paths,
+            // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
+            spike_biometric
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
