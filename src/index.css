@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --qb-bg: #ffffff;
+  --qb-sidebar: #fcfcfb;
+  --qb-border: #eeece8;
+  --qb-hair: #f3f2ef;
+  --qb-ink: #191917;
+  --qb-muted: #8c8a84;
+  --qb-muted2: #aeaca6;
+  --qb-amber: #d4842e;
+  --qb-green: #3a9d4e;
+  --qb-blue: #3b6fd4;
+  --qb-purple: #9159c9;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -55,6 +73,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Plus Jakarta Sans", sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    color: var(--qb-ink);
   }
 }
