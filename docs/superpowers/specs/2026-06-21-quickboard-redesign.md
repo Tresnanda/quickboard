@@ -78,3 +78,17 @@ After R1+R2 the look was over-colored and had hard edges. Corrections:
 4. **Soft edges everywhere.** Cards, panels, inputs, buttons, tiles, menus all generously rounded; nothing meets at a hard seam.
 5. **Dithered imagery.** Where the UI shows imagery (empty states now; item covers later), use a **monochrome dithered / halftone** treatment (refs #16/#17/#18). Implement a reusable dither (SVG `feTurbulence`→threshold, or a tiled 1-bit pattern) — subtle, low-contrast, black/white (fits ink-first). Apply to the empty state in this pass.
 6. **Component libraries.** Continue with **Radix primitives** (dialog, dropdown-menu, and add tooltip/popover as needed), styled to the system.
+
+---
+
+## FINAL shell + dither motif (BUILD TO THIS — supersedes earlier shell attempts)
+
+**Shell — match the mockup `.superpowers/brainstorm/35019-1782056093/content/target-final.html` exactly:**
+- **Two separate rounded cards** (a **LIGHT sidebar card** + a white main card) on a thin neutral canvas (`#e7e7e5`), with a **small** ~8px gap between + ~8px margin around. NOT a big floating gap, NOT flat edge-to-edge.
+- **Light sidebar card** (`#f6f6f4`, hairline border): a **logo mark** (ink rounded-square + glyph) + "quickboard" + BETA pill; a light search field; an **ink/near-black "Add item"** button; nav (Home / All items / Settings) where **active = an elevated WHITE pill with a soft shadow** (inactive = muted gray); CATEGORIES (neutral dots + counts, clickable→filter); ENVIRONMENTS label + "+ Add" (coming soon); footer = "Local · encrypted" (small green lock) + a **refined account row** (gradient avatar + "you / Local on this Mac" + a switcher chevron, in a bordered white pill).
+- **Main card** (white): **two-tone heading** ("Good **evening**" — 2nd word dimmed), controls (segmented + chips), subtle quick-access cards, hairline-divided library list, meta footer with an **amber "N confidential" badge**.
+- **Colored badges only where meaningful** (amber confidential, green encrypted) — everything else ink/neutral.
+
+**Window: edge-to-edge + DRAGGABLE.** Keep `titleBarStyle: Overlay`. The move-window bug must be fixed: put `-webkit-app-region: drag` on the canvas margins/gaps and the sidebar's empty/brand area; `no-drag` on every interactive element. Traffic lights overlay the light sidebar top-left (clear of the brand).
+
+**DITHER MOTIF — every modal & popup card.** Build a reusable **`<DitherArt>`** React component: a `<canvas>` that renders a soft procedural source (gradient / overlapping cloud blobs) and applies a **real ordered Bayer (4×4 or 8×8) 1-bit monochrome dither** — authentic dithering, NOT a CSS dot/noise background. Use it as a decorative header or side panel in **EVERY modal / popup card**: the Add-item dialog now; the confidential-unlock, edit, and customize dialogs as they're built (R3–R5); plus the empty state and (R4) default item covers. Monochrome, tasteful, subtle.

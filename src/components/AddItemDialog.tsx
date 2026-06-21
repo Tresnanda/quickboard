@@ -16,6 +16,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
+import { DitherArt } from "./DitherArt";
 import { cn } from "../lib/utils";
 
 type ItemType = "Text" | "File";
@@ -123,14 +124,31 @@ export function AddItemDialog() {
   return (
     <Dialog open={addOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-[440px] gap-0 p-0"
+        className="max-w-[440px] gap-0 overflow-hidden p-0"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           labelInputRef.current?.focus();
         }}
         aria-describedby={`${datalistId}-desc`}
       >
-        <DialogHeader className="space-y-1 px-5 pt-5 text-left">
+        {/* Decorative real-Bayer-dither header band (ink-first, monochrome).
+            Purely cosmetic — does not affect open/close. */}
+        <div
+          aria-hidden="true"
+          className="relative h-[88px] w-full overflow-hidden border-b border-border bg-[#fafafa]"
+        >
+          <DitherArt
+            width={440}
+            height={88}
+            density={1.05}
+            className="absolute inset-0 opacity-90"
+            style={{ width: "100%", height: "88px" }}
+          />
+          {/* Soft fade into the form so the dots dissolve, not cut. */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white/85" />
+        </div>
+
+        <DialogHeader className="space-y-1 px-5 pt-4 text-left">
           <DialogTitle className="text-base font-bold tracking-tight text-[var(--ink)]">
             Add item
           </DialogTitle>

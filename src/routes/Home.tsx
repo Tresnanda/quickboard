@@ -15,7 +15,7 @@ import { CopyMorph } from "../components/CopyMorph";
 import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
-import { DitherPanel } from "../components/Dither";
+import { DitherArt } from "../components/DitherArt";
 import { Button } from "../components/ui/button";
 import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
@@ -180,21 +180,32 @@ export function Home() {
         <div>
           <h1
             style={{
-              fontSize: "1.875rem",
+              fontSize: "1.8125rem",
               fontWeight: 800,
               color: "var(--ink)",
-              letterSpacing: "-0.035em",
+              letterSpacing: "-0.02em",
               margin: 0,
               lineHeight: 1.1,
             }}
           >
-            {greeting(now)}
+            {(() => {
+              // Two-tone heading: dim the second word (e.g. "Good evening").
+              const parts = greeting(now).split(" ");
+              const first = parts.shift() ?? "";
+              const rest = parts.join(" ");
+              return (
+                <>
+                  {first}{" "}
+                  <span style={{ color: "#bcbcbe" }}>{rest}</span>
+                </>
+              );
+            })()}
           </h1>
           <p
             style={{
-              fontSize: "0.9375rem",
+              fontSize: "0.875rem",
               color: "var(--muted)",
-              margin: "0.45rem 0 0",
+              margin: "0.4rem 0 0",
             }}
           >
             {items.length} {items.length === 1 ? "thing" : "things"} about you,
@@ -231,10 +242,8 @@ export function Home() {
           style={{
             display: "inline-flex",
             padding: "3px",
-            background: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "10px",
-            boxShadow: "var(--shadow-sm)",
+            background: "#f1f1ef",
+            borderRadius: "9px",
           }}
         >
           {(["recent", "name"] as const).map((mode) => {
@@ -247,16 +256,17 @@ export function Home() {
                 aria-pressed={active}
                 onClick={() => setSort(mode)}
                 style={{
-                  padding: "0.3rem 0.7rem",
+                  padding: "0.3rem 0.75rem",
                   fontSize: "0.8125rem",
                   fontWeight: 600,
                   color: active ? "var(--ink)" : "var(--muted)",
-                  background: active ? "var(--hair)" : "transparent",
+                  background: active ? "#ffffff" : "transparent",
                   border: "none",
                   borderRadius: "7px",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   letterSpacing: "-0.01em",
+                  boxShadow: active ? "0 1px 2px rgba(0,0,0,.08)" : "none",
                   transition: "color 140ms var(--ease-out)",
                 }}
               >
@@ -503,21 +513,45 @@ export function Home() {
         </section>
       </LayoutGroup>
 
-      {/* Meta footer */}
+      {/* Meta footer — amber "N confidential" badge (a meaningful signal). */}
       {items.length > 0 && (
         <div
           style={{
-            marginTop: "1.75rem",
+            marginTop: "1.5rem",
             paddingTop: "1.1rem",
             borderTop: "1px solid var(--hair)",
-            fontSize: "0.75rem",
+            fontSize: "0.78rem",
             color: "var(--faint)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
           }}
         >
-          <RollNumber value={items.length} />{" "}
-          {items.length === 1 ? "item" : "items"} · <RollNumber value={fileCount} />{" "}
-          {fileCount === 1 ? "file" : "files"} ·{" "}
-          <RollNumber value={confidentialCount} /> confidential
+          <span>
+            <RollNumber value={items.length} />{" "}
+            {items.length === 1 ? "item" : "items"} ·{" "}
+            <RollNumber value={fileCount} />{" "}
+            {fileCount === 1 ? "file" : "files"} ·
+          </span>
+          {confidentialCount > 0 ? (
+            <span
+              className="tabular"
+              style={{
+                color: "#b45309",
+                background: "#fef0d9",
+                borderRadius: "7px",
+                padding: "0.1rem 0.5rem",
+                fontWeight: 700,
+                fontSize: "0.69rem",
+              }}
+            >
+              {confidentialCount} confidential
+            </span>
+          ) : (
+            <span>
+              <RollNumber value={confidentialCount} /> confidential
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -569,7 +603,19 @@ function EmptyState({
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      <DitherPanel />
+      {/* Real ordered-Bayer-dither illustration (ink-first, monochrome). */}
+      <div
+        style={{
+          width: "132px",
+          height: "132px",
+          borderRadius: "22px",
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          background: "#fafafa",
+        }}
+      >
+        <DitherArt width={132} height={132} density={1.1} />
+      </div>
       <div style={{ maxWidth: "22rem" }}>
         <div
           style={{
@@ -643,11 +689,11 @@ function QuickCard({
         display: "flex",
         flexDirection: "column",
         gap: "0.75rem",
-        padding: "0.95rem",
-        background: "var(--card)",
-        border: "1px solid var(--border)",
+        padding: "0.9rem",
+        background: "#fafafa",
+        border: "1px solid #eeeeec",
         borderRadius: "var(--r-card)",
-        boxShadow: "var(--shadow-card)",
+        boxShadow: "var(--shadow-sm)",
         minWidth: 0,
       }}
     >

@@ -1,9 +1,16 @@
 import { useMemo } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import { Inbox, LayoutGrid, Lock, Plus, Search, Settings } from "lucide-react";
+import {
+  ChevronsUpDown,
+  Inbox,
+  LayoutGrid,
+  Lock,
+  Plus,
+  Search,
+  Settings,
+} from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { categoryColor } from "../lib/category-color";
 import { Button } from "./ui/button";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -12,15 +19,15 @@ const navItemBase: React.CSSProperties = {
   position: "relative",
   display: "flex",
   alignItems: "center",
-  gap: "0.625rem",
-  padding: "0.45rem 0.6rem",
+  gap: "0.7rem",
+  padding: "0.55rem 0.7rem",
   borderRadius: "var(--r-pill)",
-  fontSize: "0.875rem",
+  fontSize: "0.84rem",
   fontWeight: 500,
   color: "var(--side-muted)",
   textDecoration: "none",
   cursor: "pointer",
-  letterSpacing: "-0.01em",
+  letterSpacing: "-0.005em",
   background: "transparent",
   border: "none",
   width: "100%",
@@ -28,17 +35,17 @@ const navItemBase: React.CSSProperties = {
   fontFamily: "inherit",
 };
 
-// Active link: dark text on the light/white pill (drawn by NavIndicator).
+// Active link: ink text on the elevated white pill (drawn by NavIndicator).
 const navItemActive: React.CSSProperties = {
   ...navItemBase,
   color: "var(--ink)",
-  fontWeight: 600,
+  fontWeight: 700,
 };
 
 /**
- * Sliding active-nav indicator: a light/white pill. Rendered only inside the
- * active link; the shared `layoutId` makes Framer Motion morph its position as
- * the active route changes. Reduced motion -> snap (layout off).
+ * Sliding active-nav indicator: an elevated WHITE pill with a soft shadow.
+ * Rendered only inside the active link; the shared `layoutId` morphs its
+ * position as the active route changes. Reduced motion -> snap (layout off).
  */
 function NavIndicator({ reduce }: { reduce: boolean }) {
   return (
@@ -49,9 +56,9 @@ function NavIndicator({ reduce }: { reduce: boolean }) {
       style={{
         position: "absolute",
         inset: 0,
-        background: "#ffffff",
+        background: "var(--side-elev)",
         borderRadius: "var(--r-pill)",
-        boxShadow: "0 1px 2px rgba(0,0,0,.25)",
+        boxShadow: "var(--shadow-pill)",
         zIndex: 0,
       }}
     />
@@ -67,11 +74,44 @@ function NavContent({ children }: { children: React.ReactNode }) {
         zIndex: 1,
         display: "flex",
         alignItems: "center",
-        gap: "0.625rem",
+        gap: "0.7rem",
         width: "100%",
       }}
     >
       {children}
+    </span>
+  );
+}
+
+/** Ink rounded-square logo mark with a 2×2 grid glyph (matches the mock). */
+function LogoMark() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: "26px",
+        height: "26px",
+        borderRadius: "8px",
+        background: "#0b0b0c",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="15"
+        height="15"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="2.2"
+      >
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </svg>
     </span>
   );
 }
@@ -110,74 +150,75 @@ export function Sidebar() {
 
   return (
     <aside
-      className="qb-no-drag"
+      // The sidebar card; the brand/empty top band is draggable (.qb-drag),
+      // interactive children opt back out individually.
       style={{
-        width: "236px",
-        minWidth: "236px",
+        width: "244px",
+        minWidth: "244px",
+        flex: "none",
         background: "var(--side-bg)",
+        border: "1px solid var(--side-border)",
+        borderRadius: "var(--r-panel)",
         display: "flex",
         flexDirection: "column",
         // Extra top padding clears the overlaid macOS traffic lights.
-        padding: "2.25rem 0.75rem 0.875rem",
+        padding: "2.6rem 0.75rem 0.75rem",
         height: "100%",
         boxSizing: "border-box",
         color: "var(--side-fg)",
       }}
     >
-      {/* Brand */}
+      {/* Brand — draggable band (lets you grab the window near the title). */}
       <div
+        className="qb-drag"
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "0.5rem",
-          padding: "0 0.35rem",
-          marginBottom: "1.1rem",
+          gap: "0.625rem",
+          padding: "0.25rem 0.4rem 0.95rem",
         }}
       >
+        <LogoMark />
         <span
           style={{
             fontWeight: 800,
             fontSize: "1rem",
-            color: "var(--side-fg)",
-            letterSpacing: "-0.025em",
+            color: "var(--ink)",
+            letterSpacing: "-0.01em",
           }}
         >
           quickboard
         </span>
         <span
           style={{
-            fontSize: "0.625rem",
-            fontWeight: 600,
-            color: "var(--side-muted)",
-            background: "rgba(255,255,255,.06)",
-            border: "1px solid rgba(255,255,255,.08)",
-            borderRadius: "999px",
-            padding: "0.05rem 0.4rem",
+            fontSize: "0.59rem",
+            fontWeight: 700,
+            color: "#7a7a7e",
+            background: "#ececea",
+            borderRadius: "6px",
+            padding: "0.2rem 0.4rem",
             letterSpacing: "0.02em",
           }}
         >
-          Beta
+          BETA
         </span>
       </div>
 
-      {/* Search */}
+      {/* Search — light field on the light card. */}
       <label
+        className="qb-no-drag"
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "0.5rem",
-          padding: "0.45rem 0.6rem",
-          border: "1px solid rgba(255,255,255,.08)",
-          borderRadius: "9px",
-          background: "rgba(255,255,255,.05)",
-          marginBottom: "0.6rem",
+          gap: "0.55rem",
+          padding: "0.55rem 0.7rem",
+          border: "1px solid var(--border)",
+          borderRadius: "10px",
+          background: "#ffffff",
+          marginBottom: "0.7rem",
         }}
       >
-        <Search
-          size={15}
-          color="var(--side-muted)"
-          style={{ flexShrink: 0 }}
-        />
+        <Search size={15} color="var(--faint)" style={{ flexShrink: 0 }} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -189,14 +230,17 @@ export function Sidebar() {
             outline: "none",
             background: "transparent",
             fontSize: "0.8125rem",
-            color: "var(--side-fg)",
+            color: "var(--ink)",
             fontFamily: "inherit",
           }}
         />
         <kbd
           style={{
             fontSize: "0.6875rem",
-            color: "var(--side-muted)",
+            color: "var(--faint)",
+            border: "1px solid var(--border)",
+            borderRadius: "4px",
+            padding: "0 0.25rem",
             fontFamily: "inherit",
           }}
         >
@@ -204,29 +248,28 @@ export function Sidebar() {
         </kbd>
       </label>
 
-      {/* Add item — prominent button. On the dark sidebar the primary surface
-          is white-on-ink (inverse of the content area), so this is a custom
-          white shadcn Button rather than the default ink/primary variant. */}
+      {/* Add item — ink / near-black button, white text. */}
       <Button
         type="button"
         onClick={() => setAddOpen(true)}
-        className="qb-press mb-[1.1rem] h-auto justify-start gap-2 rounded-[10px] bg-white px-[0.65rem] py-2 text-[0.8125rem] font-bold tracking-tight text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,.25)] hover:bg-white/90"
+        className="qb-press qb-no-drag mb-4 h-auto justify-start gap-2 rounded-[11px] bg-[#0b0b0c] px-3 py-2.5 text-[0.84rem] font-bold tracking-tight text-white shadow-[0_2px_6px_rgba(0,0,0,.18)] hover:bg-[#0b0b0c]/90"
       >
         <Plus size={15} />
         Add item
-        <kbd className="ml-auto text-[0.6875rem] font-normal text-[var(--faint)]">
+        <kbd className="ml-auto text-[0.6875rem] font-normal text-white/50">
           ⌘N
         </kbd>
       </Button>
 
-      {/* Nav — sliding light pill shared across links via layoutId */}
+      {/* Nav — sliding white pill shared across links via layoutId */}
       <LayoutGroup id="sidebar-nav">
         <nav
+          className="qb-no-drag"
           style={{
             display: "flex",
             flexDirection: "column",
             gap: "0.125rem",
-            marginBottom: "1.25rem",
+            marginBottom: "0.4rem",
           }}
         >
           {/* Home — clears any active category filter */}
@@ -260,7 +303,7 @@ export function Sidebar() {
                 style={{
                   marginLeft: "auto",
                   fontSize: "0.75rem",
-                  color: allItemsActive ? "var(--muted)" : "var(--side-muted)",
+                  color: "var(--faint)",
                 }}
               >
                 {items.length}
@@ -286,6 +329,7 @@ export function Sidebar() {
       {/* CATEGORIES — clickable filters */}
       <SectionLabel>Categories</SectionLabel>
       <div
+        className="qb-no-drag"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -299,8 +343,8 @@ export function Sidebar() {
           <div
             style={{
               fontSize: "0.75rem",
-              color: "var(--side-muted)",
-              padding: "0.3rem 0.6rem",
+              color: "var(--faint)",
+              padding: "0.35rem 0.7rem",
             }}
           >
             No categories yet
@@ -319,26 +363,26 @@ export function Sidebar() {
                   display: "flex",
                   alignItems: "center",
                   gap: "0.6rem",
-                  padding: "0.4rem 0.6rem",
+                  padding: "0.45rem 0.7rem",
                   borderRadius: "var(--r-pill)",
                   fontSize: "0.8125rem",
-                  fontWeight: active ? 600 : 500,
-                  color: active ? "var(--ink)" : "var(--side-fg)",
-                  background: active ? "#ffffff" : "transparent",
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--ink)" : "#5a5a56",
+                  background: active ? "var(--side-elev)" : "transparent",
                   border: "none",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   textAlign: "left",
                   width: "100%",
-                  boxShadow: active ? "0 1px 2px rgba(0,0,0,.25)" : "none",
+                  boxShadow: active ? "var(--shadow-pill)" : "none",
                 }}
               >
                 <span
                   style={{
-                    width: "8px",
-                    height: "8px",
+                    width: "7px",
+                    height: "7px",
                     borderRadius: "50%",
-                    background: categoryColor(name),
+                    background: "#b6b6b1",
                     flexShrink: 0,
                   }}
                 />
@@ -356,8 +400,8 @@ export function Sidebar() {
                 <span
                   className="tabular"
                   style={{
-                    fontSize: "0.75rem",
-                    color: active ? "var(--muted)" : "var(--side-muted)",
+                    fontSize: "0.72rem",
+                    color: "var(--faint)",
                   }}
                 >
                   {counts.get(name) ?? 0}
@@ -374,16 +418,16 @@ export function Sidebar() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "0 0.6rem",
-              marginBottom: "0.5rem",
+              padding: "0 0.7rem",
+              marginBottom: "0.4rem",
             }}
           >
             <span
               style={{
-                fontSize: "0.6875rem",
+                fontSize: "0.655rem",
                 fontWeight: 700,
                 letterSpacing: "0.08em",
-                color: "var(--faint)",
+                color: "#a2a29c",
                 textTransform: "uppercase",
               }}
             >
@@ -395,25 +439,23 @@ export function Sidebar() {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.2rem",
-                fontSize: "0.6875rem",
+                gap: "0.15rem",
+                fontSize: "0.66rem",
                 fontWeight: 600,
-                color: "var(--side-muted)",
-                opacity: 0.5,
+                color: "#8a8a86",
                 cursor: "not-allowed",
                 userSelect: "none",
               }}
             >
-              <Plus size={12} />
+              <Plus size={11} />
               Add
             </span>
           </div>
           <div
             style={{
-              fontSize: "0.6875rem",
-              color: "var(--side-muted)",
-              padding: "0.1rem 0.6rem 0.3rem",
-              opacity: 0.6,
+              fontSize: "0.72rem",
+              color: "#b0b0ab",
+              padding: "0.1rem 0.7rem 0.3rem",
             }}
           >
             Coming soon
@@ -422,55 +464,51 @@ export function Sidebar() {
       </div>
 
       {/* Footer */}
-      <div style={{ marginTop: "0.75rem" }}>
+      <div className="qb-no-drag" style={{ marginTop: "0.5rem" }}>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: "0.45rem",
-            padding: "0 0.6rem",
-            fontSize: "0.6875rem",
-            color: "var(--side-muted)",
-            marginBottom: "0.6rem",
+            padding: "0.25rem 0.6rem 0.55rem",
+            fontSize: "0.71rem",
+            color: "#8a8a8e",
           }}
         >
-          <Lock size={12} color="var(--green)" />
+          <Lock size={13} color="var(--green)" />
           Local · encrypted
         </div>
+        {/* Refined account row — gradient avatar + identity + switcher, in a
+            bordered white pill. */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.55rem",
-            padding: "0.5rem 0.6rem",
-            borderTop: "1px solid rgba(255,255,255,.06)",
+            gap: "0.6rem",
+            padding: "0.45rem 0.55rem",
+            border: "1px solid var(--border)",
+            background: "#ffffff",
+            borderRadius: "11px",
           }}
         >
           <span
+            aria-hidden="true"
             style={{
-              width: "26px",
-              height: "26px",
-              borderRadius: "50%",
-              background: "rgba(255,255,255,.1)",
-              border: "1px solid rgba(255,255,255,.12)",
-              color: "var(--side-fg)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "0.75rem",
-              fontWeight: 600,
+              width: "30px",
+              height: "30px",
+              borderRadius: "8px",
+              background:
+                "linear-gradient(135deg, #cfe0f0, #e8d6f0, #f0e0d0)",
               flexShrink: 0,
             }}
-          >
-            Y
-          </span>
-          <div style={{ minWidth: 0 }}>
+          />
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{
                 fontSize: "0.8125rem",
                 fontWeight: 600,
-                color: "var(--side-fg)",
-                lineHeight: 1.2,
+                color: "var(--ink)",
+                lineHeight: 1.3,
               }}
             >
               you
@@ -478,13 +516,14 @@ export function Sidebar() {
             <div
               style={{
                 fontSize: "0.6875rem",
-                color: "var(--side-muted)",
+                color: "var(--faint)",
                 lineHeight: 1.2,
               }}
             >
               Local on this Mac
             </div>
           </div>
+          <ChevronsUpDown size={15} color="#b0b0b2" style={{ flexShrink: 0 }} />
         </div>
       </div>
     </aside>
@@ -495,13 +534,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontSize: "0.6875rem",
+        fontSize: "0.655rem",
         fontWeight: 700,
         letterSpacing: "0.08em",
-        color: "var(--faint)",
+        color: "#a2a29c",
         textTransform: "uppercase",
-        padding: "0 0.6rem",
-        marginBottom: "0.5rem",
+        padding: "0.5rem 0.7rem 0.4rem",
       }}
     >
       {children}

@@ -7,28 +7,32 @@
      High contrast, real depth, tasteful color. See
      docs/superpowers/specs/2026-06-21-quickboard-redesign.md */
 
-  /* surfaces */
-  --canvas: #e9e9e7; /* outer canvas behind the floating panels (R2.5) */
+  /* surfaces — FINAL two-card light-sidebar shell (target-final.html) */
+  --canvas: #e7e7e5; /* thin neutral canvas behind the two cards */
   --bg: #ffffff; /* content panel surface (cards pop on the in-panel bg) */
-  --panel-bg: #fbfbfa; /* main content panel (a hair off pure white) */
+  --panel-bg: #ffffff; /* main card (white) */
   --card: #ffffff;
-  --side-bg: #17171a; /* dark sidebar (floating rail) */
-  --side-elev: #1f1f23;
+  --side-bg: #f6f6f4; /* LIGHT sidebar card */
+  --side-elev: #ffffff; /* elevated white pill / surfaces inside the sidebar */
+  --side-border: #ebebe8; /* hairline around the light sidebar card */
 
   /* text — HIGH CONTRAST (the core fix) */
   --ink: #0b0b0c; /* headings — near black */
   --text: #3f3f46; /* body */
   --muted: #71717a; /* secondary, use sparingly */
   --faint: #a1a1aa;
-  --side-fg: #fafafa;
-  --side-muted: #a1a1aa;
+  /* Sidebar foreground/muted — now DARK text on the light sidebar card. */
+  --side-fg: #0b0b0c;
+  --side-muted: #74746f;
 
   /* lines + depth */
-  --border: #e6e6e4;
+  --border: #e6e6e3;
   --hair: #efefed;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 28px -12px rgba(0, 0, 0, 0.14);
   --shadow-pop: 0 10px 34px rgba(0, 0, 0, 0.16);
+  /* Elevated white nav/active pill on the light sidebar. */
+  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px -6px rgba(0, 0, 0, 0.12);
 
   /* accent + semantic + category palette */
   --accent: #4f46e5; /* primary (active, primary buttons) */
@@ -40,10 +44,10 @@
   --cyan: #0891b2;
 
   /* radii */
-  --r-panel: 18px; /* floating shell panels (sidebar + content) */
-  --r-card: 16px;
-  --r-tile: 10px;
-  --r-pill: 8px;
+  --r-panel: 13px; /* the two shell cards (sidebar + main) */
+  --r-card: 14px;
+  --r-tile: 11px;
+  --r-pill: 10px;
 
   /* floating-panel depth */
   --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -14px rgba(0, 0, 0, 0.2);
@@ -77,7 +81,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- Draggable window strip (keep the macOS traffic-light area movable) --- */
+/* --- Window dragging (titleBarStyle: Overlay) ---
+   The canvas margins/gaps and the sidebar brand/empty top area are draggable;
+   EVERY interactive element opts out with .qb-no-drag so clicks/typing work and
+   the window can still be moved by grabbing the chrome. */
 .qb-drag {
   -webkit-app-region: drag;
   app-region: drag;
@@ -85,22 +92,6 @@
 .qb-no-drag {
   -webkit-app-region: no-drag;
   app-region: no-drag;
-}
-
-/* --- Monochrome 1-bit dither (empty-state imagery, R2.5) ---
-   The actual halftone comes from an inline SVG <filter> (#qb-dither) applied
-   to a flat ink fill; this wrapper just sets size + masking. Kept low-contrast
-   and grayscale to fit the ink-first system. */
-.qb-dither {
-  display: block;
-  color: var(--ink);
-  opacity: 0.12;
-}
-@media (prefers-reduced-motion: reduce) {
-  .qb-dither {
-    /* No animation here, but keep it perfectly still + calm. */
-    opacity: 0.1;
-  }
 }
 
 /* --- Press feedback: scale-down on active for all pressables --- */
@@ -111,19 +102,22 @@
   transform: scale(0.97);
 }
 
-/* --- Dark sidebar nav / category hover (only on non-active rows) --- */
+/* --- Light sidebar nav / category hover (only on non-active rows) ---
+   Active rows paint an elevated WHITE pill (NavIndicator / inline bg); the
+   transparent non-active rows get a faint ink wash on hover. */
 .qb-side-nav,
 .qb-side-cat {
-  transition: background var(--dur-quick) var(--ease-out);
+  transition: background var(--dur-quick) var(--ease-out),
+    color var(--dur-quick) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  /* Active rows paint a white pill via inline bg / NavIndicator; only tint
-     the transparent (non-active) ones on hover. */
   .qb-side-nav:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(11, 11, 12, 0.04);
+    color: var(--ink);
   }
   .qb-side-cat[aria-pressed="false"]:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(11, 11, 12, 0.04);
+    color: var(--ink);
   }
 }
 
@@ -330,8 +324,9 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
     font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
     color: var(--qb-ink);
+    /* The thin neutral canvas shows through the two-card shell's gaps/margins. */
+    background: var(--canvas);
   }
 }

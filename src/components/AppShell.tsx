@@ -1,55 +1,43 @@
 import { Outlet } from "@tanstack/react-router";
 import { Sidebar } from "./Sidebar";
 import { AddItemDialog } from "./AddItemDialog";
-import { DitherDefs } from "./Dither";
 
 /**
- * Edge-to-edge shell. The window fills its frame with no outer canvas gap: the
- * dark sidebar is flush to the top/left/bottom edges and the light content fills
- * the rest (flush right/top/bottom). The macOS title bar is overlaid
- * (`titleBarStyle: "Overlay"` in tauri.conf.json), so the traffic lights float
- * over the sidebar's top padding; a draggable top strip lets the window move.
+ * FINAL two-card shell (matches `target-final.html`).
  *
- * The two panels meet with a soft seam — the dark/light contrast plus a faint
- * shadow cast off the sidebar's right edge, no harsh divider line.
+ * A thin neutral canvas (`--canvas` #e7e7e5) holds **two separate rounded
+ * cards** with a small ~8px gap between them and ~8px margin around: a LIGHT
+ * sidebar card and a white main card. The canvas itself — the gaps and the
+ * margins around the cards — is the window's drag handle (`.qb-drag`), so the
+ * frameless window (`titleBarStyle: "Overlay"`) can be moved by grabbing the
+ * chrome. EVERY interactive element inside the cards carries `.qb-no-drag`.
+ *
+ * The whole shell (the outer flex container) is the drag region; the two cards
+ * sit on top of it. The cards' interactive contents opt back out of dragging.
  */
 export function AppShell() {
   return (
     <div
+      // The entire canvas (incl. the ~8px margin + the gap) is draggable. The
+      // cards' interiors re-enable interaction via .qb-no-drag.
+      className="qb-drag"
       style={{
         position: "relative",
         display: "flex",
         flexDirection: "row",
+        gap: "8px",
         height: "100vh",
         width: "100vw",
-        background: "var(--side-bg)",
+        padding: "8px",
+        background: "var(--canvas)",
         boxSizing: "border-box",
         overflow: "hidden",
       }}
     >
-      {/* Reusable monochrome dither <filter> (mounted once). */}
-      <DitherDefs />
-
-      {/* Draggable strip across the top (overlaid traffic-light area stays
-          movable). Interactive children carry `.qb-no-drag`. */}
-      <div
-        className="qb-drag"
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "28px",
-          zIndex: 50,
-        }}
-      />
-
-      {/* Sidebar rail — flush to the left/top/bottom edges. */}
+      {/* LIGHT sidebar card. */}
       <Sidebar />
 
-      {/* Content — fills the rest, flush right/top/bottom. A faint inset shadow
-          on the left gives the seam soft depth without a hard border. */}
+      {/* Main card — white, rounded, fills the rest. */}
       <main
         className="qb-no-drag"
         style={{
@@ -58,7 +46,8 @@ export function AppShell() {
           minWidth: 0,
           overflow: "auto",
           background: "var(--panel-bg)",
-          boxShadow: "inset 6px 0 16px -10px rgba(0,0,0,0.35)",
+          border: "1px solid var(--side-border)",
+          borderRadius: "var(--r-panel)",
         }}
       >
         <Outlet />
