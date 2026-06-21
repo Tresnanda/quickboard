@@ -90,13 +90,8 @@ const childVariantsReduced = {
   show: { opacity: 1, transition: { duration: 0.22 } },
 };
 
-// Shared-layout morph timing (pin fly-to-Quick-access + filter FLIP reflow).
-// Kept snappy (0.24s): the FLIP reflow fires on every search keystroke, so a
-// slower morph made typing feel laggy. --ease-morph curve; reduced motion
-// disables `layout` entirely.
-const MORPH_TRANSITION = {
-  layout: { duration: 0.24, ease: [0.77, 0, 0.175, 1] as const },
-};
+// Bento tiles use static CSS-grid placement — no Framer `layout` morph, which
+// glitched the grid on add/remove/filter. Filtering repositions instantly.
 
 // Wallet deck ↔ list spring (reduced-motion → instant; see usage).
 const DECK_SPRING = { type: "spring" as const, stiffness: 360, damping: 32 };
@@ -419,7 +414,6 @@ export function Home() {
                 <BentoFile
                   item={fileTile}
                   variants={cardVariants}
-                  reduce={!!reduce}
                   onChanged={reload}
                 />
               )}
@@ -430,7 +424,6 @@ export function Home() {
                   key={item.id}
                   item={item}
                   variants={cardVariants}
-                  reduce={!!reduce}
                   onChanged={reload}
                 />
               ))}
@@ -696,61 +689,60 @@ function CategoryGroup({
 
   return (
     <motion.div variants={cardVariants} style={{ marginBottom: "1.5rem" }}>
-      {/* Group header — toggles collapsed deck ↔ expanded list. */}
-      <button
-        type="button"
-        className="qb-ghead"
-        aria-expanded={expanded}
-        onClick={onToggle}
-      >
-        <span
-          style={{
-            width: "9px",
-            height: "9px",
-            borderRadius: "50%",
-            background: categoryColor(category),
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            fontSize: "0.875rem",
-            fontWeight: 700,
-            color: "var(--ink)",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          {category}
-        </span>
-        <span
-          className="tabular"
-          style={{
-            fontSize: "0.6875rem",
-            fontWeight: 700,
-            color: "var(--muted)",
-            background: "#f3f3f2",
-            borderRadius: "999px",
-            padding: "0.05rem 0.45rem",
-            minWidth: "20px",
-            textAlign: "center",
-          }}
-        >
-          {rows.length}
-        </span>
-        <span className="qb-chevron" data-expanded={expanded} style={{ marginLeft: "auto" }}>
-          <ChevronDown size={17} />
-        </span>
-      </button>
-
       <AnimatePresence mode="wait" initial={false}>
         {expanded ? (
           <motion.div
-            key="list"
+            key="expanded"
             initial={reduce ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
             transition={transition}
           >
+            {/* Header shown only while expanded — click to collapse to the deck. */}
+            <button
+              type="button"
+              className="qb-ghead"
+              aria-expanded={true}
+              onClick={onToggle}
+            >
+              <span
+                style={{
+                  width: "9px",
+                  height: "9px",
+                  borderRadius: "50%",
+                  background: categoryColor(category),
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: "0.875rem",
+                  fontWeight: 700,
+                  color: "var(--ink)",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {category}
+              </span>
+              <span
+                className="tabular"
+                style={{
+                  fontSize: "0.6875rem",
+                  fontWeight: 700,
+                  color: "var(--muted)",
+                  background: "#f3f3f2",
+                  borderRadius: "999px",
+                  padding: "0.05rem 0.45rem",
+                  minWidth: "20px",
+                  textAlign: "center",
+                }}
+              >
+                {rows.length}
+              </span>
+              <span className="qb-chevron" data-expanded={true} style={{ marginLeft: "auto" }}>
+                <ChevronDown size={17} />
+              </span>
+            </button>
             <div className="qb-group">
               {rows.map((item) => (
                 <div
@@ -775,7 +767,12 @@ function CategoryGroup({
             exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
             transition={transition}
           >
-            <CollapsedDeck rows={rows} onExpand={onToggle} />
+            <CategoryDeck
+              category={category}
+              count={rows.length}
+              color={categoryColor(category)}
+              onExpand={onToggle}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -784,21 +781,22 @@ function CategoryGroup({
 }
 
 /**
- * Collapsed wallet deck — 2–3 stacked/fanned cards; the top one shows the
- * category's first item + an "N items" peek. Click anywhere to expand.
+ * Collapsed category as a wallet deck — a small fanned stack representing the
+ * whole category (name + item count). Click anywhere to expand to the list.
  */
-function CollapsedDeck({
-  rows,
+function CategoryDeck({
+  category,
+  count,
+  color,
   onExpand,
 }: {
-  rows: Item[];
+  category: string;
+  count: number;
+  color: string;
   onExpand: () => void;
 }) {
-  const top = rows[0];
-  const tile = categoryTile(top.category, top.confidential);
-  const extra = rows.length - 1;
-  // How many shadow cards fan out behind the top (0–2).
-  const layers = Math.min(2, rows.length - 1);
+  // How many shadow cards fan out behind the top (0–2), hinting at depth.
+  const layers = Math.min(2, Math.max(0, count - 1));
 
   return (
     <div
@@ -814,65 +812,34 @@ function CollapsedDeck({
       }}
       style={{ marginBottom: "0.5rem" }}
     >
-      {/* Fanned shadow cards behind the top. */}
       {layers >= 2 && (
         <div
           className="qb-deck-card"
-          style={{ top: "-12px", transform: "scale(0.95)", opacity: 0.5, height: "78px" }}
+          style={{ top: "-12px", transform: "scale(0.95)", opacity: 0.5, height: "62px" }}
         />
       )}
       {layers >= 1 && (
         <div
           className="qb-deck-card"
-          style={{ top: "-6px", transform: "scale(0.975)", opacity: 0.8, height: "78px" }}
+          style={{ top: "-6px", transform: "scale(0.975)", opacity: 0.8, height: "62px" }}
         />
       )}
 
-      {/* Top card — real preview of the first item. */}
+      {/* Top card — the category itself. */}
       <div className="qb-deck-card qb-deck-top" style={{ top: 0 }}>
         <span
-          className="qb-tile"
           style={{
-            position: "relative",
-            width: "34px",
-            height: "34px",
+            width: "9px",
+            height: "9px",
+            borderRadius: "50%",
+            background: color,
             flexShrink: 0,
-            borderRadius: "var(--r-tile)",
-            background: tile.bg,
-            overflow: "hidden",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: tile.fg,
           }}
-        >
-          <DitherArt
-            width={34}
-            height={34}
-            density={0.95}
-            seed={top.label}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "34px",
-              height: "34px",
-              opacity: 0.32,
-            }}
-          />
-          <span style={{ position: "relative", zIndex: 1 }}>
-            {top.confidential ? (
-              <Lock size={15} />
-            ) : top.kind === "Text" ? (
-              <KeyRound size={15} />
-            ) : (
-              <FileText size={15} />
-            )}
-          </span>
-        </span>
+        />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
-              fontSize: "0.875rem",
+              fontSize: "0.9rem",
               fontWeight: 700,
               color: "var(--ink)",
               letterSpacing: "-0.01em",
@@ -881,7 +848,7 @@ function CollapsedDeck({
               textOverflow: "ellipsis",
             }}
           >
-            {top.label}
+            {category}
           </div>
           <div
             style={{
@@ -890,20 +857,11 @@ function CollapsedDeck({
               marginTop: "1px",
             }}
           >
-            {top.kind === "File" ? `file · ${top.category}` : "text snippet"}
+            {count === 1 ? "1 item" : `${count} items`}
           </div>
         </div>
-        <span
-          className="tabular"
-          style={{
-            marginLeft: "auto",
-            fontSize: "0.72rem",
-            color: "var(--faint)",
-            fontWeight: 500,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {extra > 0 ? `${rows.length} items` : "1 item"}
+        <span className="qb-chevron" style={{ color: "var(--faint)", marginLeft: "auto" }}>
+          <ChevronDown size={17} />
         </span>
       </div>
     </div>
@@ -940,10 +898,7 @@ function BentoHero({
 
   return (
     <motion.div
-      layoutId={reduce ? undefined : item.id}
-      layout={reduce ? false : true}
       variants={variants}
-      transition={MORPH_TRANSITION}
       className="qb-bento-tile qb-bento-hero"
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1051,24 +1006,31 @@ function BentoHero({
 function BentoFile({
   item,
   variants,
-  reduce,
   onChanged,
 }: {
   item: Item;
   variants: typeof childVariants | typeof childVariantsReduced;
-  reduce: boolean;
   onChanged: () => void | Promise<void>;
 }) {
+  async function handleDragStart(event: React.DragEvent) {
+    event.preventDefault();
+    try {
+      const path = await fileToTemp(item.id);
+      await startDrag({ item: [path], icon: path });
+    } catch {
+      /* drag-out is best-effort */
+    }
+  }
+
   return (
     <motion.div
-      layoutId={reduce ? undefined : item.id}
-      layout={reduce ? false : true}
       variants={variants}
-      transition={MORPH_TRANSITION}
       className="qb-bento-tile qb-bento-file qb-img-outline"
       style={{ color: "#fff" }}
     >
       <div
+        draggable
+        onDragStart={handleDragStart}
         style={{
           position: "relative",
           flex: 1,
@@ -1076,6 +1038,7 @@ function BentoFile({
           alignItems: "flex-end",
           padding: "0.6875rem",
           overflow: "hidden",
+          cursor: "grab",
         }}
       >
         <DitherInverse seed={item.label} />
@@ -1096,6 +1059,8 @@ function BentoFile({
         </span>
         <span
           className="qb-cover-menu"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
           style={{ position: "absolute", top: "0.4rem", right: "0.4rem", zIndex: 2 }}
         >
           <ItemMenu item={item} onChanged={onChanged} />
@@ -1118,29 +1083,51 @@ function BentoFile({
 function BentoCompact({
   item,
   variants,
-  reduce,
   onChanged,
 }: {
   item: Item;
   variants: typeof childVariants | typeof childVariantsReduced;
-  reduce: boolean;
   onChanged: () => void | Promise<void>;
 }) {
   const tile = categoryTile(item.category, item.confidential);
   const { preview, confidential } = usePreview(item);
   const isText = item.kind === "Text";
+  const { copied, copy } = useCopy(item.id);
+
+  async function handleDragStart(event: React.DragEvent) {
+    event.preventDefault();
+    try {
+      const path = await fileToTemp(item.id);
+      await startDrag({ item: [path], icon: path });
+    } catch {
+      /* drag-out is best-effort */
+    }
+  }
 
   return (
     <motion.div
-      layoutId={reduce ? undefined : item.id}
-      layout={reduce ? false : true}
       variants={variants}
-      transition={MORPH_TRANSITION}
       className="qb-bento-tile"
+      role={isText ? "button" : undefined}
+      tabIndex={isText ? 0 : undefined}
+      onClick={isText ? () => void copy() : undefined}
+      onKeyDown={
+        isText
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                void copy();
+              }
+            }
+          : undefined
+      }
+      style={{ cursor: isText ? "pointer" : "default" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <span
           className="qb-tile"
+          draggable={!isText}
+          onDragStart={!isText ? handleDragStart : undefined}
           style={{
             position: "relative",
             width: "32px",
@@ -1153,6 +1140,7 @@ function BentoCompact({
             justifyContent: "center",
             color: tile.fg,
             flexShrink: 0,
+            cursor: isText ? undefined : "grab",
           }}
         >
           <DitherArt
@@ -1178,7 +1166,12 @@ function BentoCompact({
             )}
           </span>
         </span>
-        <ItemMenu item={item} onChanged={onChanged} />
+        <span
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <ItemMenu item={item} onChanged={onChanged} />
+        </span>
       </div>
       <div style={{ marginTop: "auto", minWidth: 0 }}>
         <div
@@ -1209,9 +1202,13 @@ function BentoCompact({
                 : "inherit",
           }}
         >
-          {confidential
-            ? "confidential"
-            : preview ?? (isText ? "snippet" : item.category)}
+          {copied ? (
+            <span style={{ color: "var(--green)", fontWeight: 600 }}>Copied</span>
+          ) : confidential ? (
+            "confidential"
+          ) : (
+            preview ?? (isText ? "snippet" : item.category)
+          )}
         </div>
       </div>
     </motion.div>
