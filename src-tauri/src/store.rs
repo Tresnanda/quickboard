@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use rusqlite::Connection;
 
 use crate::crypto::{decrypt, encrypt, DataKey};
@@ -6,24 +8,35 @@ use crate::model::{now_unix, Item, Kind};
 pub struct Store {
     conn: Connection,
     key: DataKey,
+    blob_dir: PathBuf,
 }
 
 impl Store {
     pub fn open_in_memory(key: DataKey) -> Result<Self, String> {
+        // Derive a unique temp dir so parallel tests don't collide.
+        let blob_dir = std::env::temp_dir()
+            .join(format!("qb-blobs-{}", uuid::Uuid::new_v4()));
         Self::init(
             Connection::open_in_memory().map_err(|e| e.to_string())?,
             key,
+            blob_dir,
         )
     }
 
     pub fn open(path: &str, key: DataKey) -> Result<Self, String> {
+        // Derive blob_dir as a sibling "blobs" directory next to the db file.
+        let blob_dir = Path::new(path)
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("blobs");
         Self::init(
             Connection::open(path).map_err(|e| e.to_string())?,
             key,
+            blob_dir,
         )
     }
 
-    fn init(conn: Connection, key: DataKey) -> Result<Self, String> {
+    fn init(conn: Connection, key: DataKey, blob_dir: PathBuf) -> Result<Self, String> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS items(
                id TEXT PRIMARY KEY, label TEXT, kind TEXT, category TEXT,
@@ -31,7 +44,7 @@ impl Store {
                created_at INTEGER, updated_at INTEGER, last_used_at INTEGER, use_count INTEGER);",
         )
         .map_err(|e| e.to_string())?;
-        Ok(Self { conn, key })
+        Ok(Self { conn, key, blob_dir })
     }
 
     pub fn add_text(
@@ -61,6 +74,38 @@ impl Store {
             )
             .map_err(|e| e.to_string())?;
         Ok(id)
+    }
+
+    pub fn add_file(
+        &self,
+        label: &str,
+        category: &str,
+        confidential: bool,
+        filename: &str,
+        mime: &str,
+        bytes: &[u8],
+    ) -> Result<String, String> {
+        let id = uuid::Uuid::new_v4().to_string();
+        crate::blobs::write_blob(&self.blob_dir, self.key, &id, bytes)?;
+        let meta = serde_json::json!({ "filename": filename, "mime": mime, "size": bytes.len() });
+        let body = crate::crypto::encrypt(&self.key, meta.to_string().as_bytes())?;
+        let now = crate::model::now_unix();
+        self.conn.execute(
+            "INSERT INTO items VALUES(?1,?2,'File',?3,?4,0,?5,?6,?6,?6,0)",
+            rusqlite::params![id, label, category, confidential as i64, body, now],
+        ).map_err(|e| e.to_string())?;
+        Ok(id)
+    }
+
+    pub fn read_file_bytes(&self, id: &str) -> Result<(String, Vec<u8>), String> {
+        let body: Vec<u8> = self.conn
+            .query_row("SELECT body FROM items WHERE id=?1", [id], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        let meta: serde_json::Value =
+            serde_json::from_slice(&crate::crypto::decrypt(&self.key, &body)?)
+                .map_err(|e| e.to_string())?;
+        let filename = meta["filename"].as_str().unwrap_or("file").to_string();
+        Ok((filename, crate::blobs::read_blob(&self.blob_dir, self.key, id)?))
     }
 
     pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
@@ -94,22 +139,24 @@ impl Store {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id,label,category,confidential,pinned,created_at,updated_at,last_used_at,use_count FROM items",
+                "SELECT id,label,kind,category,confidential,pinned,created_at,updated_at,last_used_at,use_count FROM items",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
+                let kind_str: String = r.get(2)?;
+                let kind = if kind_str == "File" { Kind::File } else { Kind::Text };
                 Ok(Item {
                     id: r.get(0)?,
                     label: r.get(1)?,
-                    kind: Kind::Text,
-                    category: r.get(2)?,
-                    confidential: r.get::<_, i64>(3)? != 0,
-                    pinned: r.get::<_, i64>(4)? != 0,
-                    created_at: r.get(5)?,
-                    updated_at: r.get(6)?,
-                    last_used_at: r.get(7)?,
-                    use_count: r.get(8)?,
+                    kind,
+                    category: r.get(3)?,
+                    confidential: r.get::<_, i64>(4)? != 0,
+                    pinned: r.get::<_, i64>(5)? != 0,
+                    created_at: r.get(6)?,
+                    updated_at: r.get(7)?,
+                    last_used_at: r.get(8)?,
+                    use_count: r.get(9)?,
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -155,5 +202,16 @@ mod tests {
         assert!(s.list().unwrap()[0].pinned);
         s.delete(&id).unwrap();
         assert_eq!(s.list().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn add_file_lists_as_file_and_reads_back() {
+        let s = Store::open_in_memory(crate::crypto::new_key()).unwrap();
+        let id = s.add_file("KTP", "Identity", true, "ktp.png", "image/png", b"PNGBYTES").unwrap();
+        let it = &s.list().unwrap()[0];
+        assert!(matches!(it.kind, crate::model::Kind::File));
+        let (name, bytes) = s.read_file_bytes(&id).unwrap();
+        assert_eq!(name, "ktp.png");
+        assert_eq!(bytes, b"PNGBYTES");
     }
 }

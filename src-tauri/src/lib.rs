@@ -13,6 +13,9 @@ pub mod keyring_dek;
 pub mod model;
 pub mod store;
 
+// Plan 2, Task 2: encrypted file-blob storage.
+pub mod blobs;
+
 // Plan 2, Task 7: core IPC commands wired to the encrypted store.
 pub mod commands;
 
