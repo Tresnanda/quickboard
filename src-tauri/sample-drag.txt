@@ -1,0 +1,6 @@
+QuickBoard drag-out spike sample file.
+
+If you can drag this file out of the app window into Finder, a browser
+upload field, or a Mail/Slack compose window, the drag-out capability works.
+
+SPIKE: throwaway drag-out test, removed in Plan 2.

@@ -1,49 +1,85 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+// SPIKE: throwaway drag-out test, removed in Plan 2
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [filePath, setFilePath] = useState<string>("");
+  const [iconPath, setIconPath] = useState<string>("");
+  const [status, setStatus] = useState<string>("idle");
+  const [error, setError] = useState<string>("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  // Resolve the absolute paths of the file to drag + the drag-preview icon.
+  useEffect(() => {
+    invoke<[string, string]>("spike_drag_paths")
+      .then(([file, icon]) => {
+        setFilePath(file);
+        setIconPath(icon);
+      })
+      .catch((e) => setError(String(e)));
+  }, []);
+
+  async function handleDragStart(e: React.DragEvent) {
+    // Prevent the browser's default (HTML) drag so the native plugin owns it.
+    e.preventDefault();
+    if (!filePath || !iconPath) {
+      setError("paths not resolved yet");
+      return;
+    }
+    setStatus("dragging...");
+    try {
+      await startDrag({ item: [filePath], icon: iconPath }, (payload) => {
+        setStatus(`drag result: ${payload.result}`);
+      });
+    } catch (err) {
+      setError(String(err));
+      setStatus("error");
+    }
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <main style={{ padding: 32, fontFamily: "system-ui, sans-serif" }}>
+      <h1>QuickBoard drag-out SPIKE</h1>
+      <p style={{ color: "#666" }}>
+        SPIKE: throwaway drag-out test, removed in Plan 2.
+      </p>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
+      <div
+        draggable
+        onDragStart={handleDragStart}
+        style={{
+          marginTop: 24,
+          display: "inline-block",
+          padding: "24px 40px",
+          border: "2px dashed #4f46e5",
+          borderRadius: 12,
+          cursor: "grab",
+          userSelect: "none",
+          fontSize: 18,
+          fontWeight: 600,
+          color: "#4f46e5",
         }}
       >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+        Drag me out →
+      </div>
+
+      <dl style={{ marginTop: 24, fontSize: 13, color: "#444" }}>
+        <dt style={{ fontWeight: 600 }}>file</dt>
+        <dd style={{ margin: "0 0 8px", wordBreak: "break-all" }}>
+          {filePath || "(resolving…)"}
+        </dd>
+        <dt style={{ fontWeight: 600 }}>icon</dt>
+        <dd style={{ margin: "0 0 8px", wordBreak: "break-all" }}>
+          {iconPath || "(resolving…)"}
+        </dd>
+        <dt style={{ fontWeight: 600 }}>status</dt>
+        <dd style={{ margin: 0 }}>{status}</dd>
+      </dl>
+
+      {error && (
+        <p style={{ color: "crimson", marginTop: 16 }}>error: {error}</p>
+      )}
     </main>
   );
 }
