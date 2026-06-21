@@ -20,7 +20,7 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
   const { copied, copy } = useCopy(item.id);
 
   const isText = item.kind === "Text";
-  const tile = categoryTile(item.category);
+  const tile = categoryTile(item.category, item.confidential);
 
   async function handleDragStart(event: React.DragEvent) {
     // R3: gate copy/reveal behind Touch ID
@@ -49,12 +49,12 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
         padding: "0.7rem 0.8rem",
         background: "var(--card)",
         border: "1px solid var(--border)",
-        borderRadius: "var(--r-tile)",
+        borderRadius: "14px",
         boxShadow: "var(--shadow-sm)",
         marginBottom: "0.5rem",
       }}
     >
-      {/* Colored icon tile in the category color */}
+      {/* Monochrome icon tile (R2.5) — neutral gray bg + ink glyph, no color */}
       <div
         style={{
           position: "relative",
@@ -62,12 +62,12 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
           height: "38px",
           flexShrink: 0,
           borderRadius: "var(--r-tile)",
-          background: item.confidential ? "rgba(217,119,6,0.1)" : tile.bg,
-          border: `1px solid ${item.confidential ? "rgba(217,119,6,0.24)" : tile.border}`,
+          background: tile.bg,
+          border: `1px solid ${tile.border}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: item.confidential ? "var(--amber)" : tile.fg,
+          color: tile.fg,
         }}
       >
         {item.confidential ? (

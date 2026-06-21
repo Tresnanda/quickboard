@@ -15,6 +15,7 @@ import { CopyMorph } from "../components/CopyMorph";
 import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
+import { DitherPanel } from "../components/Dither";
 import type { Item } from "../lib/types";
 
 type SortMode = "recent" | "name";
@@ -395,19 +396,23 @@ export function Home() {
               Loading…
             </div>
           ) : grouped.length === 0 ? (
-            <div
-              style={{
-                fontSize: "0.9375rem",
-                color: "var(--muted)",
-                padding: "1.25rem 0",
-              }}
-            >
-              {query || kindFilter !== "all"
-                ? "Nothing matches your filters."
-                : categoryFilter !== null
-                  ? `No items in ${categoryFilter}.`
-                  : "No items yet. Add your first with the button on the left."}
-            </div>
+            <EmptyState
+              filtered={!!query || kindFilter !== "all" || categoryFilter !== null}
+              title={
+                query || kindFilter !== "all"
+                  ? "Nothing matches your filters"
+                  : categoryFilter !== null
+                    ? `No items in ${categoryFilter}`
+                    : "No items yet"
+              }
+              body={
+                query || kindFilter !== "all"
+                  ? "Try clearing a filter or searching for something else."
+                  : categoryFilter !== null
+                    ? "This category is empty for now."
+                    : "Add your first with the button on the left."
+              }
+            />
           ) : (
             <motion.div
               variants={containerVariants}
@@ -534,6 +539,61 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Empty-state panel with a tasteful monochrome dither illustration (R2.5).
+ * Soft, low-contrast, ink-first — no color.
+ */
+function EmptyState({
+  title,
+  body,
+}: {
+  filtered: boolean;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        gap: "1rem",
+        padding: "3rem 1.5rem 3.5rem",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-card)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
+      <DitherPanel />
+      <div style={{ maxWidth: "22rem" }}>
+        <div
+          style={{
+            fontSize: "1.0625rem",
+            fontWeight: 700,
+            color: "var(--ink)",
+            letterSpacing: "-0.02em",
+          }}
+        >
+          {title}
+        </div>
+        <p
+          style={{
+            margin: "0.4rem 0 0",
+            fontSize: "0.875rem",
+            color: "var(--muted)",
+            lineHeight: 1.5,
+          }}
+        >
+          {body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function QuickCard({
   item,
   variants,
@@ -546,7 +606,7 @@ function QuickCard({
   onChanged: () => void | Promise<void>;
 }) {
   const isText = item.kind === "Text";
-  const tile = categoryTile(item.category);
+  const tile = categoryTile(item.category, item.confidential);
   const { copied, copy } = useCopy(item.id);
 
   async function handleDragStart(event: React.DragEvent) {
@@ -604,12 +664,12 @@ function QuickCard({
             width: "38px",
             height: "38px",
             borderRadius: "var(--r-tile)",
-            background: item.confidential ? "rgba(217,119,6,0.1)" : tile.bg,
-            border: `1px solid ${item.confidential ? "rgba(217,119,6,0.24)" : tile.border}`,
+            background: tile.bg,
+            border: `1px solid ${tile.border}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: item.confidential ? "var(--amber)" : tile.fg,
+            color: tile.fg,
             flexShrink: 0,
           }}
         >

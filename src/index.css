@@ -8,9 +8,11 @@
      docs/superpowers/specs/2026-06-21-quickboard-redesign.md */
 
   /* surfaces */
-  --bg: #f4f4f5; /* content canvas (cards pop on it) */
+  --canvas: #e9e9e7; /* outer canvas behind the floating panels (R2.5) */
+  --bg: #ffffff; /* content panel surface (cards pop on the in-panel bg) */
+  --panel-bg: #fbfbfa; /* main content panel (a hair off pure white) */
   --card: #ffffff;
-  --side-bg: #17171a; /* dark sidebar */
+  --side-bg: #17171a; /* dark sidebar (floating rail) */
   --side-elev: #1f1f23;
 
   /* text — HIGH CONTRAST (the core fix) */
@@ -38,9 +40,13 @@
   --cyan: #0891b2;
 
   /* radii */
+  --r-panel: 18px; /* floating shell panels (sidebar + content) */
   --r-card: 16px;
   --r-tile: 10px;
   --r-pill: 8px;
+
+  /* floating-panel depth */
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -14px rgba(0, 0, 0, 0.2);
 
   /* ── Legacy --qb-* aliases, remapped to the new HIGH-CONTRAST values ──
      so existing components (Home / ItemRow / Settings / Dialog) inherit
@@ -69,6 +75,32 @@
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* --- Draggable window strip (keep the macOS traffic-light area movable) --- */
+.qb-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.qb-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* --- Monochrome 1-bit dither (empty-state imagery, R2.5) ---
+   The actual halftone comes from an inline SVG <filter> (#qb-dither) applied
+   to a flat ink fill; this wrapper just sets size + masking. Kept low-contrast
+   and grayscale to fit the ink-first system. */
+.qb-dither {
+  display: block;
+  color: var(--ink);
+  opacity: 0.12;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qb-dither {
+    /* No animation here, but keep it perfectly still + calm. */
+    opacity: 0.1;
+  }
 }
 
 /* --- Press feedback: scale-down on active for all pressables --- */

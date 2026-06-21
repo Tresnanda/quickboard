@@ -25,9 +25,9 @@ const inputBase: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   border: "1px solid var(--qb-border)",
-  borderRadius: "9px",
-  background: "var(--qb-bg)",
-  padding: "0.5rem 0.65rem",
+  borderRadius: "10px",
+  background: "var(--qb-hair)",
+  padding: "0.55rem 0.7rem",
   fontSize: "0.8125rem",
   color: "var(--qb-ink)",
   fontFamily: "inherit",
@@ -442,8 +442,8 @@ export function AddItemDialog() {
                 gap: "0.6rem",
                 padding: "0.55rem 0.65rem",
                 border: "1px solid var(--qb-border)",
-                borderRadius: "9px",
-                background: "var(--qb-bg)",
+                borderRadius: "10px",
+                background: "var(--qb-hair)",
                 cursor: "pointer",
                 fontFamily: "inherit",
                 textAlign: "left",
@@ -451,7 +451,7 @@ export function AddItemDialog() {
             >
               <Lock
                 size={15}
-                color={confidential ? "var(--qb-amber)" : "var(--qb-muted2)"}
+                color={confidential ? "var(--ink)" : "var(--qb-muted2)"}
                 style={{ flexShrink: 0 }}
               />
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -478,7 +478,7 @@ export function AddItemDialog() {
                   height: "20px",
                   borderRadius: "999px",
                   flexShrink: 0,
-                  background: confidential ? "var(--qb-amber)" : "var(--qb-border)",
+                  background: confidential ? "var(--ink)" : "var(--qb-border)",
                   transition: "background 140ms ease",
                 }}
               >

@@ -65,3 +65,16 @@ Typography: Plus Jakarta Sans. Headings 700–800 in `--ink` (big + bold, like t
 - **R5:** a11y + edit polish + final review.
 
 Keep the motion from before (press, hover-reveal, copy→Check, pin fly-to-quick-access, slot-text counts, nav indicator) — re-applied on the new design, all with reduced-motion fallbacks.
+
+---
+
+## REVISION — design corrections (SUPERSEDE the above where they conflict)
+
+After R1+R2 the look was over-colored and had hard edges. Corrections:
+
+1. **Ink-first / mostly monochrome.** The whole UI is ink — near-black, grays, white. Color is RARE and only "where it matters." Remove the multi-color category palette from tiles and general use. The **"+ Add item" primary button = ink/near-black** (NOT indigo `--accent`). Category indicators = a small **neutral/ink** dot or none — not saturated reds/teals/violets. Keep a single accent token but use it almost never (a lone meaningful signal). Match the references: they are ~95% grayscale.
+2. **HARD BAN — colored icon tiles + colored borders.** Item icon tiles (the key/lock tiles) MUST be **monochrome**: neutral gray bg (`--hair`/`#f3f3f2`) + ink icon, NO colored background, NO colored border. Confidential = an **ink lock + subtle treatment**, never an amber/orange tile.
+3. **Soft, floating, rounded shell — remove hard edges.** Add an outer **canvas** behind everything; the sidebar and the main content become **rounded floating panels** with a visible **gap** between them (refs #14/#15), not full-bleed rectangles meeting at a hard seam. Rounded outer corners (~16–20px), inset margins, soft shadows; content floats as a rounded card on the canvas. Keep the macOS traffic-light area clear at the top-left.
+4. **Soft edges everywhere.** Cards, panels, inputs, buttons, tiles, menus all generously rounded; nothing meets at a hard seam.
+5. **Dithered imagery.** Where the UI shows imagery (empty states now; item covers later), use a **monochrome dithered / halftone** treatment (refs #16/#17/#18). Implement a reusable dither (SVG `feTurbulence`→threshold, or a tiled 1-bit pattern) — subtle, low-contrast, black/white (fits ink-first). Apply to the empty state in this pass.
+6. **Component libraries.** Continue with **Radix primitives** (dialog, dropdown-menu, and add tooltip/popover as needed), styled to the system.

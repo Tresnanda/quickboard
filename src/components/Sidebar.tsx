@@ -109,14 +109,16 @@ export function Sidebar() {
 
   return (
     <aside
+      className="qb-no-drag"
       style={{
-        width: "248px",
-        minWidth: "248px",
+        width: "236px",
+        minWidth: "236px",
         background: "var(--side-bg)",
-        borderRight: "1px solid rgba(255,255,255,.06)",
+        borderRadius: "var(--r-panel)",
+        boxShadow: "var(--shadow-panel)",
         display: "flex",
         flexDirection: "column",
-        padding: "50px 0.75rem 0.875rem",
+        padding: "1rem 0.75rem 0.875rem",
         height: "100%",
         boxSizing: "border-box",
         color: "var(--side-fg)",
@@ -202,7 +204,7 @@ export function Sidebar() {
         </kbd>
       </label>
 
-      {/* Add item — prominent accent button */}
+      {/* Add item — prominent INK button (ink-first, R2.5; not accent/indigo) */}
       <button
         type="button"
         className="qb-press"
@@ -212,12 +214,12 @@ export function Sidebar() {
           alignItems: "center",
           gap: "0.5rem",
           padding: "0.5rem 0.65rem",
-          background: "var(--accent)",
-          color: "#ffffff",
+          background: "#ffffff",
+          color: "var(--ink)",
           border: "none",
           borderRadius: "10px",
           fontSize: "0.8125rem",
-          fontWeight: 600,
+          fontWeight: 700,
           cursor: "pointer",
           marginBottom: "1.1rem",
           fontFamily: "inherit",
@@ -231,7 +233,7 @@ export function Sidebar() {
           style={{
             marginLeft: "auto",
             fontSize: "0.6875rem",
-            color: "rgba(255,255,255,0.6)",
+            color: "var(--faint)",
             fontFamily: "inherit",
           }}
         >
@@ -471,8 +473,9 @@ export function Sidebar() {
               width: "26px",
               height: "26px",
               borderRadius: "50%",
-              background: "var(--accent)",
-              color: "#ffffff",
+              background: "rgba(255,255,255,.1)",
+              border: "1px solid rgba(255,255,255,.12)",
+              color: "var(--side-fg)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

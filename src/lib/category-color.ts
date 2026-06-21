@@ -1,67 +1,42 @@
-// Stable category -> token color mapping, hashed by name so the same
-// category always renders the same accent across Sidebar and Home.
+// Ink-first / monochrome (R2.5). The earlier multi-color category palette is
+// REMOVED from general use: tiles, dots and indicators are now neutral ink/gray
+// so the UI reads ~95% grayscale like the references. Color is reserved for a
+// rare, genuinely-meaningful signal (e.g. the "Local · encrypted" lock) and is
+// NOT keyed off category here.
 
-const PALETTE = [
-  "var(--accent)",
-  "var(--green)",
-  "var(--amber)",
-  "var(--blue)",
-  "var(--violet)",
-  "var(--rose)",
-  "var(--cyan)",
-] as const;
-
-// Concrete hex values parallel to PALETTE, used where we need a translucent
-// tint (rgba) that CSS `var()` can't express on its own — e.g. the accent-
-// tinted icon tiles on cards. Kept in sync with index.css.
-const PALETTE_HEX = [
-  "#4f46e5", // accent
-  "#16a34a", // green
-  "#d97706", // amber
-  "#3b82f6", // blue
-  "#7c3aed", // violet
-  "#e11d48", // rose
-  "#0891b2", // cyan
-] as const;
-
-function indexFor(name: string): number {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash) % PALETTE.length;
-}
-
-/** Solid token color (CSS var) for a category — dots, icon glyphs, accents. */
-export function categoryColor(name: string): string {
-  return PALETTE[indexFor(name)];
-}
-
-/** Concrete hex for a category (when rgba math is needed). */
-export function categoryHex(name: string): string {
-  return PALETTE_HEX[indexFor(name)];
+/**
+ * Neutral dot color for a category indicator. Monochrome — a subtle gray, the
+ * same for every category (no saturated reds/teals/violets). Kept as a function
+ * so call sites don't need to change.
+ */
+export function categoryColor(_name?: string): string {
+  return "var(--faint)";
 }
 
 /**
- * Accent-tinted surface for an icon tile in the category color: a soft
- * translucent wash + a matching hairline border, plus the solid glyph color.
+ * Monochrome icon-tile treatment. Neutral gray surface + ink glyph, NO colored
+ * background and NO colored border. `confidential` shifts to a subtle ink lock
+ * treatment (a touch darker), never an amber/orange tile.
  */
-export function categoryTile(name: string): {
+export function categoryTile(
+  _name?: string,
+  confidential = false,
+): {
   bg: string;
   border: string;
   fg: string;
 } {
-  const hex = PALETTE_HEX[indexFor(name)];
+  if (confidential) {
+    return {
+      // Subtle ink wash for the lock — still monochrome, just slightly deeper.
+      bg: "rgba(11, 11, 12, 0.06)",
+      border: "rgba(11, 11, 12, 0.12)",
+      fg: "var(--ink)",
+    };
+  }
   return {
-    bg: hexToRgba(hex, 0.1),
-    border: hexToRgba(hex, 0.22),
-    fg: hex,
+    bg: "var(--hair)",
+    border: "var(--border)",
+    fg: "var(--ink)",
   };
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
