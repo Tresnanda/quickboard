@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
-import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "framer-motion";
+import {
+  ChevronDown,
   FileText,
   KeyRound,
   Lock,
+  Plus,
   X,
 } from "lucide-react";
 import { useItems } from "../lib/items-store";
@@ -18,6 +25,7 @@ import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
 import { DitherArt } from "../components/DitherArt";
+import { GradientBrand } from "../components/GradientBrand";
 import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
@@ -31,12 +39,14 @@ function greeting(date: Date): string {
   return "Good evening";
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
+// Short date for the header pill (e.g. "Mon · 22 Jun").
+function formatDatePill(date: Date): string {
+  const wd = date.toLocaleDateString(undefined, { weekday: "short" });
+  const dm = date.toLocaleDateString(undefined, {
     day: "numeric",
+    month: "short",
   });
+  return `${wd} · ${dm}`;
 }
 
 function matchesQuery(item: Item, q: string): boolean {
@@ -82,11 +92,13 @@ const childVariantsReduced = {
 
 // Shared-layout morph timing (pin fly-to-Quick-access + filter FLIP reflow):
 // --dur-slow (0.36s) on the --ease-morph curve. Passed to Framer Motion's
-// `layout` transition. Reduced motion disables `layout` entirely (instant
-// reposition / cross-fade), so this curve only applies to the full path.
+// `layout` transition. Reduced motion disables `layout` entirely.
 const MORPH_TRANSITION = {
   layout: { duration: 0.36, ease: [0.77, 0, 0.175, 1] as const },
 };
+
+// Wallet deck ↔ list spring (reduced-motion → instant; see usage).
+const DECK_SPRING = { type: "spring" as const, stiffness: 360, damping: 32 };
 
 export function Home() {
   const {
@@ -99,6 +111,7 @@ export function Home() {
     setCategoryFilter,
     selectedItemId,
     setSelectedItemId,
+    setAddOpen,
   } = useItems();
   const reduce = useReducedMotion();
   const now = useMemo(() => new Date(), []);
@@ -109,8 +122,7 @@ export function Home() {
   const cardVariants = reduce ? childVariantsReduced : childVariants;
 
   // Track the most-recently-added item so its row can play a one-shot
-  // add-success highlight. We key off the newest created_at; when that id
-  // changes we mark it for a single flash, then clear it.
+  // add-success highlight.
   const latestId = useMemo(() => {
     if (items.length === 0) return null;
     return items.reduce((a, b) => (b.created_at > a.created_at ? b : a)).id;
@@ -122,7 +134,6 @@ export function Home() {
 
   useEffect(() => {
     if (firstPass.current) {
-      // Don't flash the existing newest item on initial load.
       firstPass.current = false;
       seenLatest.current = latestId;
       return;
@@ -135,28 +146,37 @@ export function Home() {
     }
   }, [latestId]);
 
-  // Sidebar sub-item click sets `selectedItemId`: scroll the matching row into
-  // view and flash it, then clear the one-shot selection.
+  // Sidebar sub-item click sets `selectedItemId`: ensure its category is
+  // expanded, scroll the matching row into view and flash it.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (!selectedItemId) return;
-    const el = document.querySelector<HTMLElement>(
-      `[data-item-id="${CSS.escape(selectedItemId)}"]`,
-    );
-    if (el) {
-      el.scrollIntoView({
-        behavior: reduce ? "auto" : "smooth",
-        block: "center",
-      });
+    const target = items.find((i) => i.id === selectedItemId);
+    if (target) {
+      // Auto-expand the category so the row is mounted before we scroll to it.
+      setExpanded((prev) => ({ ...prev, [target.category]: true }));
     }
+    const scroll = window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-item-id="${CSS.escape(selectedItemId)}"]`,
+      );
+      if (el) {
+        el.scrollIntoView({
+          behavior: reduce ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+    }, 60);
     setFlashId(selectedItemId);
     const clear = window.setTimeout(() => setFlashId(null), 900);
     const release = window.setTimeout(() => setSelectedItemId(null), 1000);
     return () => {
+      window.clearTimeout(scroll);
       window.clearTimeout(clear);
       window.clearTimeout(release);
     };
-    // Runs when the sidebar selects an item; the row carries a data-item-id.
-  }, [selectedItemId, reduce, setSelectedItemId]);
+  }, [selectedItemId, reduce, setSelectedItemId, items]);
 
   // Client-side filter (search + category + kind chip) then sort.
   const filtered = useMemo(() => {
@@ -176,8 +196,7 @@ export function Home() {
   const pinned = useMemo(() => filtered.filter((i) => i.pinned), [filtered]);
 
   // IA: pinned items live ONLY in Quick access; the Library category groups
-  // show NON-pinned items (no duplication). Toggling `pinned` moves an item
-  // between the two regions, which the shared `layoutId` morphs.
+  // show NON-pinned items (no duplication).
   const grouped = useMemo(() => {
     const map = new Map<string, Item[]>();
     for (const item of filtered) {
@@ -198,38 +217,47 @@ export function Home() {
     [items],
   );
 
+  // Bento Quick-access composition: a hero (the top pinned/most-used), then a
+  // file tile (first pinned File for the dither cover), then compact tiles.
+  const heroItem = pinned[0] ?? null;
+  const restPinned = pinned.slice(1);
+  const fileTile = restPinned.find((i) => i.kind === "File") ?? null;
+  const compact = restPinned.filter((i) => i.id !== fileTile?.id).slice(0, 4);
+
+  const isFilteredEmpty =
+    !!query || kindFilter !== "all" || categoryFilter !== null;
+
   return (
     <div style={{ padding: "30px 30px 48px", maxWidth: "1000px", margin: "0 auto" }}>
-      {/* Header */}
+      {/* ── Redesigned header: tighter two-tone greeting + date pill ── */}
       <header
         style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
           gap: "1rem",
-          marginBottom: "1.4rem",
+          marginBottom: "1.25rem",
         }}
       >
         <div>
           <h1
             style={{
-              fontSize: "1.8125rem",
+              fontSize: "1.625rem",
               fontWeight: 800,
               color: "var(--ink)",
-              letterSpacing: "-0.02em",
+              letterSpacing: "-0.025em",
               margin: 0,
               lineHeight: 1.1,
             }}
           >
             {(() => {
-              // Two-tone heading: dim the second word (e.g. "Good evening").
               const parts = greeting(now).split(" ");
               const first = parts.shift() ?? "";
               const rest = parts.join(" ");
               return (
                 <>
                   {first}{" "}
-                  <span style={{ color: "#bcbcbe" }}>{rest}</span>
+                  <span style={{ color: "#c4c4c6" }}>{rest}</span>
                 </>
               );
             })()}
@@ -237,9 +265,9 @@ export function Home() {
           <p
             className="tabular"
             style={{
-              fontSize: "0.875rem",
+              fontSize: "0.8125rem",
               color: "var(--muted)",
-              margin: "0.4rem 0 0",
+              margin: "0.25rem 0 0",
             }}
           >
             {items.length} {items.length === 1 ? "thing" : "things"} about you,
@@ -249,17 +277,20 @@ export function Home() {
         <span
           className="tabular"
           style={{
-            fontSize: "0.8125rem",
-            color: "var(--faint)",
+            fontSize: "0.78rem",
+            fontWeight: 600,
+            color: "#aeaeb2",
             whiteSpace: "nowrap",
-            paddingTop: "0.5rem",
+            background: "#f6f6f5",
+            borderRadius: "9px",
+            padding: "0.375rem 0.6875rem",
           }}
         >
-          {formatDate(now)}
+          {formatDatePill(now)}
         </span>
       </header>
 
-      {/* Controls row — sort + kind filter chips (client-side, instant) */}
+      {/* ── Unified control toolbar: segmented sort · divider · filter pills ── */}
       <div
         style={{
           display: "flex",
@@ -269,85 +300,45 @@ export function Home() {
           marginBottom: "1.75rem",
         }}
       >
-        {/* Sort segmented control */}
-        <div
-          role="group"
-          aria-label="Sort"
-          style={{
-            display: "inline-flex",
-            padding: "3px",
-            background: "#f1f1ef",
-            borderRadius: "9px",
-          }}
-        >
-          {(["recent", "name"] as const).map((mode) => {
-            const active = sort === mode;
-            return (
+        <div className="qb-toolbar" role="group" aria-label="Sort and filter">
+          {/* Segmented sort */}
+          <div className="qb-seg" role="group" aria-label="Sort">
+            {(["recent", "name"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
-                className="qb-press"
-                aria-pressed={active}
+                className="qb-seg-btn qb-press"
+                aria-pressed={sort === mode}
                 onClick={() => setSort(mode)}
-                style={{
-                  padding: "0.3rem 0.75rem",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  color: active ? "var(--ink)" : "var(--muted)",
-                  background: active ? "#ffffff" : "transparent",
-                  border: "none",
-                  // Concentric: inner radius = outer (9px) − padding (3px) = 6px.
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  letterSpacing: "-0.01em",
-                  boxShadow: active ? "0 1px 2px rgba(0,0,0,.08)" : "none",
-                  transition: "color 140ms var(--ease-out)",
-                }}
               >
                 {mode === "recent" ? "Recent" : "Name"}
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
 
-        {/* Kind filter chips */}
-        <div style={{ display: "inline-flex", gap: "0.4rem", flexWrap: "wrap" }}>
-          {(
-            [
-              ["all", "All"],
-              ["text", "Text"],
-              ["files", "Files"],
-              ["confidential", "Confidential"],
-            ] as const
-          ).map(([key, label]) => {
-            const active = kindFilter === key;
-            return (
+          <span aria-hidden="true" className="qb-toolbar-div" />
+
+          {/* Filter pills */}
+          <div style={{ display: "inline-flex", gap: "0.25rem" }}>
+            {(
+              [
+                ["all", "All"],
+                ["text", "Text"],
+                ["files", "Files"],
+                ["confidential", "Confidential"],
+              ] as const
+            ).map(([key, label]) => (
               <button
                 key={key}
                 type="button"
-                className="qb-press"
-                aria-pressed={active}
+                className="qb-fpill qb-press"
+                aria-pressed={kindFilter === key}
                 onClick={() => setKindFilter(key)}
-                style={{
-                  padding: "0.35rem 0.75rem",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  color: active ? "#ffffff" : "var(--text)",
-                  background: active ? "var(--ink)" : "var(--card)",
-                  border: `1px solid ${active ? "var(--ink)" : "var(--border)"}`,
-                  borderRadius: "999px",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  letterSpacing: "-0.01em",
-                  boxShadow: active ? "none" : "var(--shadow-sm)",
-                  transition: "color 140ms var(--ease-out), background 140ms var(--ease-out)",
-                }}
               >
                 {label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
         {/* Active category filter chip (set from the Sidebar). Click to clear. */}
@@ -361,7 +352,7 @@ export function Home() {
               display: "inline-flex",
               alignItems: "center",
               gap: "0.45rem",
-              padding: "0.35rem 0.5rem 0.35rem 0.65rem",
+              padding: "0.4rem 0.5rem 0.4rem 0.65rem",
               background: "var(--card)",
               border: "1px solid var(--border)",
               borderRadius: "999px",
@@ -403,26 +394,38 @@ export function Home() {
         </div>
       )}
 
-      {/* Quick access + Library share one LayoutGroup so a pinned item morphs
-          (shared layoutId) between its Library row and its Quick-access card,
-          and library rows FLIP-reflow when the filter changes. */}
       <LayoutGroup id="home-items">
-        {/* Quick access */}
-        {pinned.length > 0 && (
+        {/* ── Bento Quick access ── */}
+        {pinned.length > 0 && heroItem && (
           <section style={{ marginBottom: "2.5rem" }}>
             <SectionLabel>Quick access</SectionLabel>
             <motion.div
+              className="qb-bento"
               variants={containerVariants}
               initial="hidden"
               animate="show"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: "0.8125rem",
-              }}
             >
-              {pinned.map((item) => (
-                <QuickCard
+              {/* Hero tile (2×2) */}
+              <BentoHero
+                item={heroItem}
+                variants={cardVariants}
+                reduce={!!reduce}
+                onChanged={reload}
+              />
+
+              {/* File dither-cover tile (monochrome), if a pinned File exists */}
+              {fileTile && (
+                <BentoFile
+                  item={fileTile}
+                  variants={cardVariants}
+                  reduce={!!reduce}
+                  onChanged={reload}
+                />
+              )}
+
+              {/* Compact tiles */}
+              {compact.map((item) => (
+                <BentoCompact
                   key={item.id}
                   item={item}
                   variants={cardVariants}
@@ -430,11 +433,24 @@ export function Home() {
                   onChanged={reload}
                 />
               ))}
+
+              {/* "Mint item" add tile */}
+              <motion.button
+                type="button"
+                variants={cardVariants}
+                className="qb-bento-tile qb-bento-add"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus size={16} />
+                <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+                  Mint item
+                </span>
+              </motion.button>
             </motion.div>
           </section>
         )}
 
-        {/* Library */}
+        {/* ── Library: wallet-style collapsible categories ── */}
         <section>
           <SectionLabel>Library</SectionLabel>
 
@@ -444,21 +460,22 @@ export function Home() {
             </div>
           ) : grouped.length === 0 ? (
             <EmptyState
-              filtered={!!query || kindFilter !== "all" || categoryFilter !== null}
+              filtered={isFilteredEmpty}
               title={
                 query || kindFilter !== "all"
                   ? "Nothing matches your filters"
                   : categoryFilter !== null
                     ? `No items in ${categoryFilter}`
-                    : "No items yet"
+                    : "Mint your first item"
               }
               body={
                 query || kindFilter !== "all"
                   ? "Try clearing a filter or searching for something else."
                   : categoryFilter !== null
                     ? "This category is empty for now."
-                    : "Add your first with the button on the left."
+                    : "Store a snippet or a file — encrypted locally, one keystroke away."
               }
+              onMint={isFilteredEmpty ? undefined : () => setAddOpen(true)}
             />
           ) : (
             <motion.div
@@ -467,86 +484,22 @@ export function Home() {
               animate="show"
             >
               {grouped.map(([category, rows]) => (
-                <div key={category} style={{ marginBottom: "2rem" }}>
-                  {/* Group header with colored dot, label, count badge */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.6rem",
-                      marginBottom: "0.7rem",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: "9px",
-                        height: "9px",
-                        borderRadius: "50%",
-                        background: categoryColor(category),
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span
-                      style={{
-                        fontSize: "0.875rem",
-                        fontWeight: 700,
-                        color: "var(--ink)",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {category}
-                    </span>
-                    <span
-                      className="tabular"
-                      style={{
-                        fontSize: "0.6875rem",
-                        fontWeight: 700,
-                        color: "var(--muted)",
-                        background: "var(--card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "999px",
-                        padding: "0.05rem 0.4rem",
-                        minWidth: "20px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {rows.length}
-                    </span>
-                    <span
-                      style={{
-                        flex: 1,
-                        height: "1px",
-                        background: "var(--hair)",
-                        marginLeft: "0.25rem",
-                      }}
-                    />
-                  </div>
-
-                  {/* iOS grouped-inset container: rows are hairline-divided
-                      inside one rounded, soft-shadowed surface. */}
-                  <div className="qb-group">
-                    {rows.map((item) => (
-                      <motion.div
-                        key={item.id}
-                        data-item-id={item.id}
-                        // Shared id with the Quick-access card: pin toggle morphs
-                        // this row into / out of the grid. `layout` also drives
-                        // the FLIP reflow when the search filter changes the set.
-                        layoutId={reduce ? undefined : item.id}
-                        layout={reduce ? false : "position"}
-                        variants={cardVariants}
-                        transition={MORPH_TRANSITION}
-                        style={{ position: "relative" }}
-                      >
-                        <ItemRow
-                          item={item}
-                          onChanged={reload}
-                          justAdded={item.id === flashId}
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
+                <CategoryGroup
+                  key={category}
+                  category={category}
+                  rows={rows}
+                  expanded={expanded[category] ?? false}
+                  onToggle={() =>
+                    setExpanded((prev) => ({
+                      ...prev,
+                      [category]: !(prev[category] ?? false),
+                    }))
+                  }
+                  reduce={!!reduce}
+                  cardVariants={cardVariants}
+                  flashId={flashId}
+                  onChanged={reload}
+                />
               ))}
             </motion.div>
           )}
@@ -616,16 +569,18 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Empty-state panel with a tasteful monochrome dither illustration (R2.5).
- * Soft, low-contrast, ink-first — no color.
+ * Empty-state panel — a brand moment. A gradient-shader panel (the ONLY place
+ * the gradient appears, alongside the minting sheet) + a serif headline.
  */
 function EmptyState({
   title,
   body,
+  onMint,
 }: {
   filtered: boolean;
   title: string;
   body: string;
+  onMint?: () => void;
 }) {
   return (
     <div
@@ -635,42 +590,31 @@ function EmptyState({
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
-        gap: "1rem",
-        padding: "3rem 1.5rem 3.5rem",
+        gap: "1.25rem",
+        padding: "2.5rem 1.5rem 3rem",
         background: "var(--card)",
         border: "1px solid var(--border)",
         borderRadius: "var(--r-card)",
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      {/* Real ordered-Bayer-dither illustration (ink-first, monochrome).
-          Subtle pure-black low-opacity outline keeps the image from floating. */}
-      <div
-        className="qb-img-outline"
-        style={{
-          width: "132px",
-          height: "132px",
-          borderRadius: "22px",
-          overflow: "hidden",
-          background: "#fafafa",
-        }}
-      >
-        <DitherArt width={132} height={132} density={1.1} />
-      </div>
-      <div style={{ maxWidth: "22rem" }}>
+      {/* Gradient brand panel (image outline keeps it from floating). */}
+      <GradientBrand height={150} radius="20px" style={{ width: "min(100%, 320px)" }} />
+
+      <div style={{ maxWidth: "24rem" }}>
         <div
+          className="font-serif-brand"
           style={{
-            fontSize: "1.0625rem",
-            fontWeight: 700,
+            fontSize: "1.375rem",
+            fontWeight: 600,
             color: "var(--ink)",
-            letterSpacing: "-0.02em",
           }}
         >
           {title}
         </div>
         <p
           style={{
-            margin: "0.4rem 0 0",
+            margin: "0.5rem 0 0",
             fontSize: "0.875rem",
             color: "var(--muted)",
             lineHeight: 1.5,
@@ -679,11 +623,282 @@ function EmptyState({
           {body}
         </p>
       </div>
+
+      {onMint && (
+        <button
+          type="button"
+          className="qb-press"
+          onClick={onMint}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            minHeight: "40px",
+            padding: "0.55rem 1rem",
+            background: "var(--ink)",
+            color: "#fff",
+            border: "none",
+            borderRadius: "11px",
+            fontFamily: "inherit",
+            fontSize: "0.8125rem",
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            cursor: "pointer",
+          }}
+        >
+          <Plus size={15} />
+          Mint your first item
+        </button>
+      )}
     </div>
   );
 }
 
-function QuickCard({
+// ── Wallet-style collapsible category ──────────────────────────────────────
+function CategoryGroup({
+  category,
+  rows,
+  expanded,
+  onToggle,
+  reduce,
+  cardVariants,
+  flashId,
+  onChanged,
+}: {
+  category: string;
+  rows: Item[];
+  expanded: boolean;
+  onToggle: () => void;
+  reduce: boolean;
+  cardVariants: typeof childVariants | typeof childVariantsReduced;
+  flashId: string | null;
+  onChanged: () => void | Promise<void>;
+}) {
+  const transition = reduce ? { duration: 0 } : DECK_SPRING;
+
+  return (
+    <motion.div variants={cardVariants} style={{ marginBottom: "1.5rem" }}>
+      {/* Group header — toggles collapsed deck ↔ expanded list. */}
+      <button
+        type="button"
+        className="qb-ghead"
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        <span
+          style={{
+            width: "9px",
+            height: "9px",
+            borderRadius: "50%",
+            background: categoryColor(category),
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: "0.875rem",
+            fontWeight: 700,
+            color: "var(--ink)",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {category}
+        </span>
+        <span
+          className="tabular"
+          style={{
+            fontSize: "0.6875rem",
+            fontWeight: 700,
+            color: "var(--muted)",
+            background: "#f3f3f2",
+            borderRadius: "999px",
+            padding: "0.05rem 0.45rem",
+            minWidth: "20px",
+            textAlign: "center",
+          }}
+        >
+          {rows.length}
+        </span>
+        <span className="qb-chevron" data-expanded={expanded} style={{ marginLeft: "auto" }}>
+          <ChevronDown size={17} />
+        </span>
+      </button>
+
+      <AnimatePresence mode="wait" initial={false}>
+        {expanded ? (
+          <motion.div
+            key="list"
+            initial={reduce ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+            transition={transition}
+          >
+            <div className="qb-group">
+              {rows.map((item) => (
+                <motion.div
+                  key={item.id}
+                  data-item-id={item.id}
+                  layoutId={reduce ? undefined : item.id}
+                  layout={reduce ? false : "position"}
+                  variants={cardVariants}
+                  transition={MORPH_TRANSITION}
+                  style={{ position: "relative" }}
+                >
+                  <ItemRow
+                    item={item}
+                    onChanged={onChanged}
+                    justAdded={item.id === flashId}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="deck"
+            initial={reduce ? false : { opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+            transition={transition}
+          >
+            <CollapsedDeck rows={rows} onExpand={onToggle} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/**
+ * Collapsed wallet deck — 2–3 stacked/fanned cards; the top one shows the
+ * category's first item + an "N items" peek. Click anywhere to expand.
+ */
+function CollapsedDeck({
+  rows,
+  onExpand,
+}: {
+  rows: Item[];
+  onExpand: () => void;
+}) {
+  const top = rows[0];
+  const tile = categoryTile(top.category, top.confidential);
+  const extra = rows.length - 1;
+  // How many shadow cards fan out behind the top (0–2).
+  const layers = Math.min(2, rows.length - 1);
+
+  return (
+    <div
+      className="qb-deck"
+      role="button"
+      tabIndex={0}
+      onClick={onExpand}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onExpand();
+        }
+      }}
+      style={{ marginBottom: "0.5rem" }}
+    >
+      {/* Fanned shadow cards behind the top. */}
+      {layers >= 2 && (
+        <div
+          className="qb-deck-card"
+          style={{ top: "-12px", transform: "scale(0.95)", opacity: 0.5, height: "78px" }}
+        />
+      )}
+      {layers >= 1 && (
+        <div
+          className="qb-deck-card"
+          style={{ top: "-6px", transform: "scale(0.975)", opacity: 0.8, height: "78px" }}
+        />
+      )}
+
+      {/* Top card — real preview of the first item. */}
+      <div className="qb-deck-card qb-deck-top" style={{ top: 0 }}>
+        <span
+          className="qb-tile"
+          style={{
+            position: "relative",
+            width: "34px",
+            height: "34px",
+            flexShrink: 0,
+            borderRadius: "var(--r-tile)",
+            background: tile.bg,
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: tile.fg,
+          }}
+        >
+          <DitherArt
+            width={34}
+            height={34}
+            density={0.95}
+            seed={top.label}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "34px",
+              height: "34px",
+              opacity: 0.32,
+            }}
+          />
+          <span style={{ position: "relative", zIndex: 1 }}>
+            {top.confidential ? (
+              <Lock size={15} />
+            ) : top.kind === "Text" ? (
+              <KeyRound size={15} />
+            ) : (
+              <FileText size={15} />
+            )}
+          </span>
+        </span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: "0.875rem",
+              fontWeight: 700,
+              color: "var(--ink)",
+              letterSpacing: "-0.01em",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {top.label}
+          </div>
+          <div
+            style={{
+              fontSize: "0.72rem",
+              color: "var(--muted)",
+              marginTop: "1px",
+            }}
+          >
+            {top.kind === "File" ? `file · ${top.category}` : "text snippet"}
+          </div>
+        </div>
+        <span
+          className="tabular"
+          style={{
+            marginLeft: "auto",
+            fontSize: "0.72rem",
+            color: "var(--faint)",
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {extra > 0 ? `${rows.length} items` : "1 item"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Bento tiles ─────────────────────────────────────────────────────────────
+/** Hero (2×2): the top pinned / most-used item. MONOCHROME seal. */
+function BentoHero({
   item,
   variants,
   reduce,
@@ -694,14 +909,12 @@ function QuickCard({
   reduce: boolean;
   onChanged: () => void | Promise<void>;
 }) {
-  const isText = item.kind === "Text";
-  const isFile = item.kind === "File";
   const tile = categoryTile(item.category, item.confidential);
   const { copied, copy } = useCopy(item.id);
   const { preview, confidential } = usePreview(item);
+  const isText = item.kind === "Text";
 
   async function handleDragStart(event: React.DragEvent) {
-    // R3: gate copy/reveal behind Touch ID
     event.preventDefault();
     try {
       const path = await fileToTemp(item.id);
@@ -713,190 +926,279 @@ function QuickCard({
 
   return (
     <motion.div
-      // Shared id with the Library row so a pin toggle morphs the element
-      // between the row and this card shape. Inner content cross-fades.
       layoutId={reduce ? undefined : item.id}
       layout={reduce ? false : true}
       variants={variants}
       transition={MORPH_TRANSITION}
-      className="qb-quick-card"
-      style={{
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
-        background: "#ffffff",
-        borderRadius: "var(--r-card)",
-        overflow: "hidden",
-        minWidth: 0,
-      }}
+      className="qb-bento-tile qb-bento-hero"
     >
-      {/* FILE: generative dither cover band (larger seeded art, like the mock). */}
-      {isFile && (
-        <motion.div
-          layout={reduce ? false : "position"}
-          className="qb-img-outline"
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span
+          className="qb-tile"
           style={{
             position: "relative",
-            height: "78px",
-            background: "#16161a",
+            width: "44px",
+            height: "44px",
+            borderRadius: "var(--r-tile)",
+            background: tile.bg,
             overflow: "hidden",
             display: "flex",
-            alignItems: "flex-end",
-            padding: "0.625rem 0.8125rem",
+            alignItems: "center",
+            justifyContent: "center",
+            color: tile.fg,
+            flexShrink: 0,
           }}
         >
-          <DitherInverse seed={item.label} />
-          <span
+          <DitherArt
+            width={44}
+            height={44}
+            density={0.95}
+            seed={item.label}
             style={{
-              position: "relative",
-              zIndex: 1,
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              color: "#ffffff",
-              textShadow: "0 1px 4px rgba(0,0,0,.5)",
+              position: "absolute",
+              inset: 0,
+              width: "44px",
+              height: "44px",
+              opacity: 0.32,
+            }}
+          />
+          <span style={{ position: "relative", zIndex: 1 }}>
+            {item.confidential ? <Lock size={20} /> : <KeyRound size={20} />}
+          </span>
+        </span>
+        <ItemMenu item={item} onChanged={onChanged} />
+      </div>
+
+      <div style={{ marginTop: "0.7rem", minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: "1.0625rem",
+            fontWeight: 800,
+            color: "var(--ink)",
+            letterSpacing: "-0.02em",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {item.label}
+        </div>
+        {confidential ? (
+          <div style={{ marginTop: "4px" }}>
+            <ConfidentialFrost width={150} />
+          </div>
+        ) : (
+          <div
+            className={preview ? "tabular" : undefined}
+            style={{
+              fontSize: "0.8125rem",
+              fontFamily: preview
+                ? "ui-monospace, SFMono-Regular, monospace"
+                : "inherit",
+              color: "var(--muted)",
+              marginTop: "4px",
               whiteSpace: "nowrap",
               overflow: "hidden",
               textOverflow: "ellipsis",
+              letterSpacing: preview ? "0.02em" : "0",
             }}
           >
-            {item.label}
-          </span>
-          {/* ⋯ floats over the cover, top-right (recolored light for contrast). */}
-          <span
-            className="qb-cover-menu"
-            style={{ position: "absolute", top: "0.4rem", right: "0.4rem", zIndex: 2 }}
-          >
-            <ItemMenu item={item} onChanged={onChanged} />
-          </span>
-        </motion.div>
-      )}
+            {preview ?? (isText ? "Text snippet" : `File · ${item.category}`)}
+          </div>
+        )}
+      </div>
 
+      <div style={{ marginTop: "auto", paddingTop: "0.7rem" }}>
+        {isText ? (
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className={cn("qb-glass-btn", copied && "text-[var(--green)]")}
+          >
+            <CopyMorph copied={copied} reduce={reduce} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            draggable
+            onDragStart={handleDragStart}
+            className="qb-glass-btn cursor-grab"
+          >
+            <FileText size={14} />
+            drag out
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/** File tile — MONOCHROME dither cover band (inverse on dark), label + meta. */
+function BentoFile({
+  item,
+  variants,
+  reduce,
+  onChanged,
+}: {
+  item: Item;
+  variants: typeof childVariants | typeof childVariantsReduced;
+  reduce: boolean;
+  onChanged: () => void | Promise<void>;
+}) {
+  return (
+    <motion.div
+      layoutId={reduce ? undefined : item.id}
+      layout={reduce ? false : true}
+      variants={variants}
+      transition={MORPH_TRANSITION}
+      className="qb-bento-tile qb-bento-file qb-img-outline"
+      style={{ color: "#fff" }}
+    >
       <div
         style={{
+          position: "relative",
+          flex: 1,
           display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-          padding: isFile ? "0.8125rem 0.9rem 0.9rem" : "0.9rem",
+          alignItems: "flex-end",
+          padding: "0.6875rem",
+          overflow: "hidden",
         }}
       >
-        {/* TEXT / CONFIDENTIAL: tile + ⋯ row (file cover already has its own). */}
-        {!isFile && (
-          <motion.div
-            // Cross-fade the differing inner bits while the outer box morphs.
-            layout={reduce ? false : "position"}
+        <DitherInverse seed={item.label} />
+        <span
+          style={{
+            position: "relative",
+            zIndex: 1,
+            fontSize: "0.8125rem",
+            fontWeight: 700,
+            color: "#fff",
+            textShadow: "0 1px 4px rgba(0,0,0,.5)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {item.label}
+        </span>
+        <span
+          className="qb-cover-menu"
+          style={{ position: "absolute", top: "0.4rem", right: "0.4rem", zIndex: 2 }}
+        >
+          <ItemMenu item={item} onChanged={onChanged} />
+        </span>
+      </div>
+      <div
+        style={{
+          padding: "0.5rem 0.75rem",
+          fontSize: "0.6875rem",
+          color: "#a8a8ac",
+        }}
+      >
+        File · {item.category}
+      </div>
+    </motion.div>
+  );
+}
+
+/** Compact tile — small seal + label + snippet line. MONOCHROME. */
+function BentoCompact({
+  item,
+  variants,
+  reduce,
+  onChanged,
+}: {
+  item: Item;
+  variants: typeof childVariants | typeof childVariantsReduced;
+  reduce: boolean;
+  onChanged: () => void | Promise<void>;
+}) {
+  const tile = categoryTile(item.category, item.confidential);
+  const { preview, confidential } = usePreview(item);
+  const isText = item.kind === "Text";
+
+  return (
+    <motion.div
+      layoutId={reduce ? undefined : item.id}
+      layout={reduce ? false : true}
+      variants={variants}
+      transition={MORPH_TRANSITION}
+      className="qb-bento-tile"
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span
+          className="qb-tile"
+          style={{
+            position: "relative",
+            width: "32px",
+            height: "32px",
+            borderRadius: "var(--r-tile)",
+            background: tile.bg,
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: tile.fg,
+            flexShrink: 0,
+          }}
+        >
+          <DitherArt
+            width={32}
+            height={32}
+            density={0.95}
+            seed={item.label}
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: "0.5rem",
+              position: "absolute",
+              inset: 0,
+              width: "32px",
+              height: "32px",
+              opacity: 0.32,
             }}
-          >
-            <span
-              className="qb-tile"
-              style={{
-                position: "relative",
-                width: "38px",
-                height: "38px",
-                borderRadius: "var(--r-tile)",
-                background: tile.bg,
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: tile.fg,
-                flexShrink: 0,
-              }}
-            >
-              {/* Seeded dither behind the glyph — subtle per-item identity. */}
-              <DitherArt
-                width={38}
-                height={38}
-                density={0.95}
-                seed={item.label}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "38px",
-                  height: "38px",
-                  opacity: 0.32,
-                }}
-              />
-              <span style={{ position: "relative", zIndex: 1 }}>
-                {item.confidential ? <Lock size={16} /> : <KeyRound size={16} />}
-              </span>
-            </span>
-            <ItemMenu item={item} onChanged={onChanged} />
-          </motion.div>
-        )}
-
-        <motion.div layout={reduce ? false : "position"} style={{ minWidth: 0 }}>
-          {/* File label already shown on the cover; show meta line instead. */}
-          {!isFile && (
-            <div
-              style={{
-                fontSize: "0.9375rem",
-                fontWeight: 700,
-                color: "var(--ink)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                letterSpacing: "-0.015em",
-              }}
-            >
-              {item.label}
-            </div>
-          )}
-
-          {confidential ? (
-            <div style={{ marginTop: isFile ? 0 : "3px" }}>
-              <ConfidentialFrost width={120} />
-            </div>
-          ) : (
-            <div
-              className={preview ? "tabular" : undefined}
-              style={{
-                fontSize: "0.75rem",
-                fontFamily: preview
-                  ? "ui-monospace, SFMono-Regular, monospace"
-                  : "inherit",
-                color: "var(--muted)",
-                marginTop: isFile ? 0 : "3px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                letterSpacing: preview ? "0.02em" : "0",
-              }}
-            >
-              {preview ?? (isFile ? `File · ${item.category}` : "Text snippet")}
-            </div>
-          )}
-        </motion.div>
-
-        {/* Primary action: glassy copy (Text) / drag (File) */}
-        <motion.div layout={reduce ? false : "position"}>
-          {isText ? (
-            <button
-              type="button"
-              onClick={() => void copy()}
-              className={cn(
-                "qb-glass-btn",
-                copied && "text-[var(--green)]",
-              )}
-            >
-              <CopyMorph copied={copied} reduce={reduce} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              draggable
-              onDragStart={handleDragStart}
-              className="qb-glass-btn cursor-grab"
-            >
-              <FileText size={14} />
-              drag out
-            </button>
-          )}
-        </motion.div>
+          />
+          <span style={{ position: "relative", zIndex: 1 }}>
+            {item.confidential ? (
+              <Lock size={15} />
+            ) : isText ? (
+              <KeyRound size={15} />
+            ) : (
+              <FileText size={15} />
+            )}
+          </span>
+        </span>
+        <ItemMenu item={item} onChanged={onChanged} />
+      </div>
+      <div style={{ marginTop: "auto", minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: "0.84rem",
+            fontWeight: 800,
+            color: "var(--ink)",
+            letterSpacing: "-0.015em",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {item.label}
+        </div>
+        <div
+          className={preview && !confidential ? "tabular" : undefined}
+          style={{
+            fontSize: "0.6875rem",
+            color: "var(--muted)",
+            marginTop: "1px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            fontFamily:
+              preview && !confidential
+                ? "ui-monospace, SFMono-Regular, monospace"
+                : "inherit",
+          }}
+        >
+          {confidential
+            ? "confidential"
+            : preview ?? (isText ? "snippet" : item.category)}
+        </div>
       </div>
     </motion.div>
   );
@@ -904,9 +1206,7 @@ function QuickCard({
 
 /**
  * Inverted seeded dither used on dark file-cover bands: same generative
- * pattern as the tiles, but rendered white-on-dark so it reads against the
- * #16161a cover. We wrap <DitherArt> (which paints ink dots) and invert it via
- * a CSS filter so the dots become white, then soft-mask the edges.
+ * MONOCHROME pattern as the tiles, rendered white-on-dark via a CSS filter.
  */
 function DitherInverse({ seed }: { seed: string }) {
   return (
@@ -925,10 +1225,10 @@ function DitherInverse({ seed }: { seed: string }) {
     >
       <DitherArt
         width={200}
-        height={78}
+        height={120}
         density={1.05}
         seed={seed}
-        style={{ width: "100%", height: "78px" }}
+        style={{ width: "100%", height: "100%" }}
       />
     </span>
   );

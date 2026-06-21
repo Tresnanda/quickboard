@@ -511,6 +511,199 @@ kbd {
   outline-offset: -1px;
 }
 
+/* --- Editorial serif: brand-moment headlines ONLY (minting sheet + empty
+   state). Everything else stays Plus Jakarta Sans. --- */
+.font-serif-brand {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+/* --- Unified control toolbar (sort segmented · divider · filter pills) ---
+   One rounded #fafafa container with depth — not loose floating chips. */
+.qb-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 6px;
+  background: #fafafa;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.045),
+    0 6px 16px -10px rgba(0, 0, 0, 0.12);
+}
+/* Segmented sort control, nested inside the toolbar (white inner card). */
+.qb-seg {
+  display: inline-flex;
+  padding: 3px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+.qb-seg-btn {
+  padding: 0.375rem 0.8125rem;
+  /* Concentric: inner radius = 10px − 3px padding = 7px (round to 8). */
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #76767a;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+.qb-seg-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: #ffffff;
+}
+/* Thin divider between segment + filters. */
+.qb-toolbar-div {
+  width: 1px;
+  height: 22px;
+  background: #e6e6e3;
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+/* Filter pills (sit in the toolbar, on the #fafafa surface). */
+.qb-fpill {
+  padding: 0.375rem 0.8125rem;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: #56565a;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out),
+    background var(--dur-quick) var(--ease-out),
+    box-shadow var(--dur-quick) var(--ease-out);
+}
+.qb-fpill[aria-pressed="true"] {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-seg-btn[aria-pressed="false"]:hover,
+  .qb-fpill[aria-pressed="false"]:hover {
+    color: var(--ink);
+  }
+}
+
+/* --- Bento Quick-access grid: importance-sized tiles --- */
+.qb-bento {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 96px;
+  gap: 0.6875rem;
+}
+.qb-bento-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: #ffffff;
+  padding: 0.8125rem;
+  box-shadow: var(--shadow-depth);
+  transition: box-shadow var(--dur-std) var(--ease-out),
+    transform var(--dur-std) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-bento-tile:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-depth-hover);
+  }
+}
+.qb-bento-hero {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+.qb-bento-file {
+  grid-row: span 2;
+  padding: 0;
+  background: #16161a;
+}
+/* "Mint item" add tile — dashed, ink-first, not a depth card. */
+.qb-bento-add {
+  border: 1.5px dashed #d8d8d6;
+  background: #fafafa;
+  box-shadow: none;
+  align-items: center;
+  justify-content: center;
+  color: #9a9a9e;
+  cursor: pointer;
+  transition: color var(--dur-quick) var(--ease-out),
+    border-color var(--dur-quick) var(--ease-out),
+    background var(--dur-quick) var(--ease-out),
+    transform var(--dur-quick) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-bento-add:hover {
+    color: var(--ink);
+    border-color: #b8b8b4;
+    background: #f5f5f3;
+  }
+}
+.qb-bento-add:active {
+  transform: scale(0.96);
+}
+
+/* --- Wallet-style collapsed deck (2–3 fanned cards) --- */
+.qb-deck {
+  position: relative;
+  height: 78px;
+  cursor: pointer;
+}
+.qb-deck-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 8px 20px -12px rgba(0, 0, 0, 0.22);
+}
+.qb-deck-top {
+  display: flex;
+  align-items: center;
+  gap: 0.8125rem;
+  padding: 0.8125rem 0.9375rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-deck:hover .qb-deck-top {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06),
+      0 12px 26px -12px rgba(0, 0, 0, 0.26);
+  }
+}
+.qb-deck-top {
+  transition: box-shadow var(--dur-std) var(--ease-out);
+}
+
+/* Category group header (wallet) — toggle, ≥40px hit area. */
+.qb-ghead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.25rem 0.25rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: opacity var(--dur-quick) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .qb-ghead:hover {
+    opacity: 0.85;
+  }
+}
+
 /* --- Add-success one-shot highlight (tint -> transparent) --- */
 @keyframes qb-add-flash {
   from {

@@ -118,3 +118,21 @@ The app currently reads "generic admin panel." Make it premium + uniquely crafte
 - **Inline quick-edit** (double-click a value → edit → save on blur) + **hover-to-peek**.
 
 Apply **emil-design-eng + motion-design + make-interfaces-feel-better** throughout. Ink-first, no emoji, shadcn primitives, reduced-motion + a11y, exact-pin deps.
+
+---
+
+## GRADIENT SHADER = brand/taste ONLY + the agreed build bundle (latest, supersedes "gradient on everything")
+
+- **The gradient shader (`src/assets/gradient-dither.png`, the user's asset) is ONLY for brand/taste-identity moments:** the minting-sheet art panel, empty states, and an optional welcome/brand card (refs #50/#51). **Do NOT use it on item seals, icons, bento tiles, or covers** — those stay **ink-first MONOCHROME** (the existing monochrome generative `DitherArt` seals). Optimize the image (downscale to ~1100px, it's currently 6 MB) before app use.
+- **Editorial serif** (a tasteful serif display, e.g. via `@fontsource`) for **brand-moment headlines only** (minting sheet, empty state, welcome) — keep **Plus Jakarta Sans for all UI**.
+- **Personalization is a FUTURE feature** (user-customizable appearance/themes). Keep defaults cleanly themeable; do NOT build it now.
+
+### Home refinements (build onto the CURRENT app — keep everything else):
+1. **Quick Access = bento** (importance-sized tiles, MONOCHROME seals): hero pinned tile + file dither-cover (monochrome) + compact tiles + a "Mint item" tile. Replaces the single big card.
+2. **Header redesigned:** tighter greeting + a date pill; sort + filters unified into ONE refined control **toolbar** (segmented sort · divider · filter pills) with depth — not loose floating chips.
+3. **Wallet-style collapsible categories:** each Library category toggles between a **collapsed deck** (stacked cards, click to expand) and the **expanded iOS grouped list**. Animate deck↔list (spring, reduced-motion aware).
+
+### Minting Add sheet (the input as a signature experience):
+- iOS bottom **Sheet**, split layout: form on the left, a **live-preview item card** on the right that builds as you type (label, category pill, value preview, the item's MONOCHROME seal). A **gradient-shader art panel** + serif headline as the brand accent. Reliable open/close (shadcn Sheet, controlled by `addOpen`).
+
+### Interactive layer: ⌘K command palette, full keyboard nav, live fuzzy search + match highlighting, optimistic-animated state, inline quick-edit (double-click value), hover-to-peek.
