@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use crate::crypto::{decrypt, encrypt, DataKey};
-use crate::model::{Item, Kind};
+use crate::model::{now_unix, Item, Kind};
 
 pub struct Store {
     conn: Connection,
@@ -41,9 +41,19 @@ impl Store {
         confidential: bool,
         value: &str,
     ) -> Result<String, String> {
+        self.add_text_at(label, category, confidential, value, now_unix())
+    }
+
+    pub fn add_text_at(
+        &self,
+        label: &str,
+        category: &str,
+        confidential: bool,
+        value: &str,
+        now: i64,
+    ) -> Result<String, String> {
         let id = uuid::Uuid::new_v4().to_string();
         let body = encrypt(&self.key, value.as_bytes())?;
-        let now = 0i64; // real timestamp injected by the command layer in Task 7
         self.conn
             .execute(
                 "INSERT INTO items VALUES(?1,?2,'Text',?3,?4,0,?5,?6,?6,?6,0)",
@@ -51,6 +61,33 @@ impl Store {
             )
             .map_err(|e| e.to_string())?;
         Ok(id)
+    }
+
+    pub fn set_pinned(&self, id: &str, pinned: bool) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE items SET pinned=?1, updated_at=?2 WHERE id=?3",
+                rusqlite::params![pinned as i64, now_unix(), id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete(&self, id: &str) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM items WHERE id=?1", [id])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn touch_used(&self, id: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "UPDATE items SET last_used_at=?1, use_count=use_count+1 WHERE id=?2",
+                rusqlite::params![now_unix(), id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub fn list(&self) -> Result<Vec<Item>, String> {
@@ -105,5 +142,18 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].label, "BCA IBAN");
         assert_eq!(store.get_text(&id).unwrap(), "ID1234567890"); // decrypts
+    }
+
+    #[test]
+    fn timestamps_are_set_and_update_pins() {
+        let s = Store::open_in_memory(crate::crypto::new_key()).unwrap();
+        let id = s.add_text_at("Plate", "Home", false, "B1234XYZ", 1_700_000_000).unwrap();
+        let items = s.list().unwrap();
+        assert_eq!(items[0].created_at, 1_700_000_000);
+        assert!(!items[0].pinned);
+        s.set_pinned(&id, true).unwrap();
+        assert!(s.list().unwrap()[0].pinned);
+        s.delete(&id).unwrap();
+        assert_eq!(s.list().unwrap().len(), 0);
     }
 }
