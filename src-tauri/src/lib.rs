@@ -7,6 +7,10 @@ pub mod crypto;
 // Plan 2, Task 5: persist the Data Encryption Key in the OS keyring.
 pub mod keyring_dek;
 
+// Plan 2, Task 6: item data model and encrypted SQLite store.
+pub mod model;
+pub mod store;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {

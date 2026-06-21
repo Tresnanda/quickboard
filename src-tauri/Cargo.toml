@@ -38,6 +38,13 @@ rand = "=0.8.5"
 keyring = { version = "=3.2.0", features = ["apple-native"] }
 base64 = "=0.22.1"
 
+# Item store (Plan 2, Task 6): encrypted SQLite persistence.
+# rusqlite bundled = statically links libsqlite3 (no system dep needed).
+# serde derive already pulled in above; uuid v4 for item IDs.
+# All exact-pinned per supply-chain rules.
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
+uuid = { version = "=1.10.0", features = ["v4"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 # SPIKE: Touch ID gate via LocalAuthentication (LAContext). robius-authentication
 # wraps objc2-local-authentication and works UNSIGNED (no keychain entitlement),
