@@ -120,7 +120,16 @@ check in front of it, decoupled from keychain ACL entitlements.)
 
 ---
 
-## RESULT: ⏳ pending human re-test
+## RESULT: ✅ VERIFIED — Touch ID prompt appears and authenticates under unsigned `tauri dev`, NO -34018 error.
+
+### KNOWN ISSUE (fix in Plan 2's real gate, do not polish spike code)
+There is a noticeable lag between a successful fingerprint scan and the UI showing
+`result: true`. Prime suspect: `spike_biometric` is a **synchronous** Tauri command
+calling `robius-authentication`'s **`blocking_authenticate`**, so the auth result
+contends with Tauri's command/IPC threading and doesn't flush back to the webview
+until the blocked thread frees. **Fix in Plan 2:** make the gate command `async` and
+run the blocking auth in `tauri::async_runtime::spawn_blocking` (or call LAContext
+directly and deliver the completion via a channel). Re-measure after the change.
 
 ---
 
