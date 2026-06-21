@@ -6,6 +6,8 @@ import { categoryTile } from "../lib/category-color";
 import { useCopy } from "../lib/use-copy";
 import { CopyMorph } from "./CopyMorph";
 import { ItemMenu } from "./ItemMenu";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
 type ItemRowProps = {
@@ -123,50 +125,30 @@ export function ItemRow({ item, onChanged, justAdded = false }: ItemRowProps) {
         }}
       >
         {isText ? (
-          <button
+          <Button
             type="button"
-            className="qb-press"
+            variant="outline"
+            size="sm"
             onClick={() => void copy()}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.32rem 0.6rem",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              color: copied ? "var(--green)" : "var(--text)",
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              cursor: "pointer",
-              transition: "color 140ms var(--ease-out)",
-            }}
+            className={cn(
+              "qb-press h-auto gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
+              copied ? "text-[var(--green)]" : "text-[var(--text)]",
+            )}
           >
             <CopyMorph copied={copied} reduce={!!reduce} />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className="qb-press"
+            variant="outline"
+            size="sm"
             draggable
             onDragStart={handleDragStart}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.32rem 0.6rem",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              color: "var(--text)",
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              cursor: "grab",
-            }}
+            className="qb-press h-auto cursor-grab gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--text)]"
           >
             <FileText size={13} />
             drag out
-          </button>
+          </Button>
         )}
 
         <ItemMenu item={item} onChanged={onChanged} />

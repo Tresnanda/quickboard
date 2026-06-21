@@ -16,6 +16,8 @@ import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
 import { DitherPanel } from "../components/Dither";
+import { Button } from "../components/ui/button";
+import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
 type SortMode = "recent" | "name";
@@ -719,54 +721,28 @@ function QuickCard({
       {/* Primary action: copy (Text) / drag (File) */}
       <motion.div layout={reduce ? false : "position"}>
         {isText ? (
-          <button
+          <Button
             type="button"
-            className="qb-press"
+            variant="outline"
             onClick={() => void copy()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.375rem",
-              width: "100%",
-              padding: "0.4rem 0.6rem",
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-              color: copied ? "var(--green)" : "var(--text)",
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "9px",
-              cursor: "pointer",
-              transition: "color 140ms var(--ease-out)",
-            }}
+            className={cn(
+              "qb-press h-auto w-full gap-1.5 rounded-[9px] px-2.5 py-2 text-[0.8125rem] font-semibold transition-colors",
+              copied ? "text-[var(--green)]" : "text-[var(--text)]",
+            )}
           >
             <CopyMorph copied={copied} reduce={reduce} />
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className="qb-press"
+            variant="outline"
             draggable
             onDragStart={handleDragStart}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.375rem",
-              width: "100%",
-              padding: "0.4rem 0.6rem",
-              fontSize: "0.8125rem",
-              fontWeight: 600,
-              color: "var(--text)",
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "9px",
-              cursor: "grab",
-            }}
+            className="qb-press h-auto w-full cursor-grab gap-1.5 rounded-[9px] px-2.5 py-2 text-[0.8125rem] font-semibold text-[var(--text)]"
           >
             <FileText size={14} />
             drag out
-          </button>
+          </Button>
         )}
       </motion.div>
     </motion.div>

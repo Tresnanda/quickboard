@@ -4,10 +4,14 @@ import { AddItemDialog } from "./AddItemDialog";
 import { DitherDefs } from "./Dither";
 
 /**
- * Soft floating shell (R2.5). An outer neutral canvas holds two rounded
- * floating panels — the dark sidebar rail and the light content panel — with a
- * visible gap between them and inset margins all around. The top margin keeps
- * the macOS traffic lights clear; that strip stays draggable.
+ * Edge-to-edge shell. The window fills its frame with no outer canvas gap: the
+ * dark sidebar is flush to the top/left/bottom edges and the light content fills
+ * the rest (flush right/top/bottom). The macOS title bar is overlaid
+ * (`titleBarStyle: "Overlay"` in tauri.conf.json), so the traffic lights float
+ * over the sidebar's top padding; a draggable top strip lets the window move.
+ *
+ * The two panels meet with a soft seam — the dark/light contrast plus a faint
+ * shadow cast off the sidebar's right edge, no harsh divider line.
  */
 export function AppShell() {
   return (
@@ -18,18 +22,16 @@ export function AppShell() {
         flexDirection: "row",
         height: "100vh",
         width: "100vw",
-        background: "var(--canvas)",
+        background: "var(--side-bg)",
         boxSizing: "border-box",
-        // Inset margins around the panels; extra top keeps traffic lights clear.
-        padding: "38px 10px 10px",
-        gap: "10px",
         overflow: "hidden",
       }}
     >
       {/* Reusable monochrome dither <filter> (mounted once). */}
       <DitherDefs />
 
-      {/* Draggable strip across the top (traffic-light area stays movable). */}
+      {/* Draggable strip across the top (overlaid traffic-light area stays
+          movable). Interactive children carry `.qb-no-drag`. */}
       <div
         className="qb-drag"
         aria-hidden="true"
@@ -38,15 +40,16 @@ export function AppShell() {
           top: 0,
           left: 0,
           right: 0,
-          height: "38px",
-          zIndex: 5,
+          height: "28px",
+          zIndex: 50,
         }}
       />
 
-      {/* Sidebar rail — rounded floating panel */}
+      {/* Sidebar rail — flush to the left/top/bottom edges. */}
       <Sidebar />
 
-      {/* Content — rounded floating panel on the canvas */}
+      {/* Content — fills the rest, flush right/top/bottom. A faint inset shadow
+          on the left gives the seam soft depth without a hard border. */}
       <main
         className="qb-no-drag"
         style={{
@@ -55,9 +58,7 @@ export function AppShell() {
           minWidth: 0,
           overflow: "auto",
           background: "var(--panel-bg)",
-          borderRadius: "var(--r-panel)",
-          boxShadow: "var(--shadow-panel)",
-          border: "1px solid rgba(0,0,0,0.04)",
+          boxShadow: "inset 6px 0 16px -10px rgba(0,0,0,0.35)",
         }}
       >
         <Outlet />

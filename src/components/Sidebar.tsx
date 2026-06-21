@@ -4,6 +4,7 @@ import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { Inbox, LayoutGrid, Lock, Plus, Search, Settings } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { categoryColor } from "../lib/category-color";
+import { Button } from "./ui/button";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
@@ -114,11 +115,10 @@ export function Sidebar() {
         width: "236px",
         minWidth: "236px",
         background: "var(--side-bg)",
-        borderRadius: "var(--r-panel)",
-        boxShadow: "var(--shadow-panel)",
         display: "flex",
         flexDirection: "column",
-        padding: "1rem 0.75rem 0.875rem",
+        // Extra top padding clears the overlaid macOS traffic lights.
+        padding: "2.25rem 0.75rem 0.875rem",
         height: "100%",
         boxSizing: "border-box",
         color: "var(--side-fg)",
@@ -204,42 +204,20 @@ export function Sidebar() {
         </kbd>
       </label>
 
-      {/* Add item — prominent INK button (ink-first, R2.5; not accent/indigo) */}
-      <button
+      {/* Add item — prominent button. On the dark sidebar the primary surface
+          is white-on-ink (inverse of the content area), so this is a custom
+          white shadcn Button rather than the default ink/primary variant. */}
+      <Button
         type="button"
-        className="qb-press"
         onClick={() => setAddOpen(true)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          padding: "0.5rem 0.65rem",
-          background: "#ffffff",
-          color: "var(--ink)",
-          border: "none",
-          borderRadius: "10px",
-          fontSize: "0.8125rem",
-          fontWeight: 700,
-          cursor: "pointer",
-          marginBottom: "1.1rem",
-          fontFamily: "inherit",
-          letterSpacing: "-0.01em",
-          boxShadow: "0 1px 2px rgba(0,0,0,.25)",
-        }}
+        className="qb-press mb-[1.1rem] h-auto justify-start gap-2 rounded-[10px] bg-white px-[0.65rem] py-2 text-[0.8125rem] font-bold tracking-tight text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,.25)] hover:bg-white/90"
       >
         <Plus size={15} />
         Add item
-        <kbd
-          style={{
-            marginLeft: "auto",
-            fontSize: "0.6875rem",
-            color: "var(--faint)",
-            fontFamily: "inherit",
-          }}
-        >
+        <kbd className="ml-auto text-[0.6875rem] font-normal text-[var(--faint)]">
           ⌘N
         </kbd>
-      </button>
+      </Button>
 
       {/* Nav — sliding light pill shared across links via layoutId */}
       <LayoutGroup id="sidebar-nav">
