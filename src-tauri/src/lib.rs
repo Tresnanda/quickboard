@@ -8,9 +8,9 @@ fn greet(name: &str) -> String {
 }
 
 // SPIKE: throwaway, removed/replaced in Plan 2.
-// Stores a user-presence-gated secret in the macOS keychain and reads it back.
-// The read is expected to trigger a Touch ID prompt. Returns Ok(true) on a
-// matching round-trip, or a String error.
+// Triggers a Touch ID system prompt via LocalAuthentication (LAContext). Works
+// under unsigned `tauri dev` with no keychain entitlement / no code-signing.
+// Returns Ok(true) on successful auth, or a String error on cancel/failure.
 #[tauri::command]
 fn spike_biometric() -> Result<bool, String> {
     confidential::biometric_roundtrip()

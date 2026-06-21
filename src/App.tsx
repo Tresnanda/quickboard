@@ -42,7 +42,7 @@ function App() {
   }
 
   // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
-  // Invokes the Rust round-trip; the keychain READ should trigger Touch ID.
+  // Invokes the Rust LAContext call; this should trigger a Touch ID prompt.
   async function handleTestTouchId() {
     setBioError("");
     setBioStatus("invoking… (expect a Touch ID prompt)");
@@ -100,10 +100,11 @@ function App() {
 
       {/* SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2. */}
       <hr style={{ margin: "32px 0", border: "none", borderTop: "1px solid #ddd" }} />
-      <h2 style={{ fontSize: 18 }}>Touch ID keychain SPIKE</h2>
+      <h2 style={{ fontSize: 18 }}>Touch ID (LocalAuthentication) SPIKE</h2>
       <p style={{ color: "#666", fontSize: 13 }}>
-        SPIKE: stores a user-presence-gated secret in the macOS keychain and reads
-        it back. The read should trigger a Touch ID prompt. Removed in Plan 2.
+        SPIKE: calls LocalAuthentication (LAContext) in Rust to trigger a system
+        Touch ID prompt. Needs no keychain entitlement and no code-signing, so it
+        works under unsigned <code>tauri dev</code>. Removed in Plan 2.
       </p>
       <button
         type="button"

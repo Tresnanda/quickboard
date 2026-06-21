@@ -58,10 +58,7 @@ we stop and reconsider the stack.
 6. Watch the in-window `status` line — the plugin reports `Dropped` or
    `Cancelled` via the drag callback after each attempt.
 
-**RESULT: ⏳ pending human verification**
-
-> Fill in per target: (a) Finder = ? (b) Browser upload = ? (c) Mail/Slack = ?
-> Note the OS version and whether the drag preview icon showed.
+RESULT: ✅ VERIFIED — drag-out works into Finder, Gmail upload field, and Slack. Does NOT work into WhatsApp Desktop (known finicky drop target; non-blocking edge case).
 
 ---
 

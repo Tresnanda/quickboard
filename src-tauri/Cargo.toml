@@ -25,5 +25,10 @@ serde_json = "1"
 tauri-plugin-drag = "=2.1.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-security-framework = "=3.7.0"
+# SPIKE: Touch ID gate via LocalAuthentication (LAContext). robius-authentication
+# wraps objc2-local-authentication and works UNSIGNED (no keychain entitlement),
+# unlike the previous security-framework keychain approach which failed with
+# -34018 errSecMissingEntitlement under unsigned `tauri dev`. Exact-pinned per
+# supply-chain rules; cross-platform crate aligned with our future goals.
+robius-authentication = "=0.1.1"
 

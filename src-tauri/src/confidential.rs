@@ -1,64 +1,75 @@
 // SPIKE: throwaway, removed/replaced in Plan 2.
 //
-// Feasibility spike for Task 3: prove that the Rust backend can store a key in
-// the macOS keychain behind a biometric / user-presence access-control gate,
-// such that *reading* the item triggers a Touch ID (or device-passcode) prompt.
+// Feasibility spike for Task 3: prove that the Rust backend can trigger a
+// Touch ID prompt that works under an UNSIGNED `tauri dev` binary, with NO
+// keychain entitlement and NO code-signing.
 //
-// API used (security-framework v3.7.0):
-//   - `PasswordOptions::new_generic_password(service, account)`
-//   - `PasswordOptions::set_access_control_options(AccessControlOptions::USER_PRESENCE)`
-//       -> maps to `kSecAccessControlUserPresence`, i.e. an item whose access
-//          requires biometry (Touch ID / Face ID) OR the device passcode.
-//   - `set_generic_password_options(secret, options)` to create the item.
-//   - `generic_password(options)` to read it back. THIS read is the call that
-//       should surface the Touch ID prompt, because LocalAuthentication evaluates
-//       the access-control object when the protected data is returned.
+// WHY THIS APPROACH (Path A — LocalAuthentication / LAContext):
+//   The previous approach stored a biometric-gated item in the macOS keychain
+//   (security-framework, kSecAccessControlUserPresence) and tried to surface
+//   Touch ID on read. That FAILED under unsigned `tauri dev` with
+//   `-34018 errSecMissingEntitlement`: protected keychain items require a
+//   code-signed app carrying a `keychain-access-groups` entitlement.
 //
-// The round-trip returns Ok(true) iff the secret read back matches the secret
-// written. Any keychain failure is mapped to a String error.
+//   Instead we call LocalAuthentication directly:
+//   `LAContext.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics)`.
+//   That API only drives the biometric subsystem to show the system Touch ID
+//   prompt — it touches no protected keychain data — so it needs neither an
+//   entitlement nor a signed binary. It works in plain unsigned `tauri dev`.
+//
+// IMPLEMENTATION:
+//   We use the `robius-authentication` crate (v0.1.1), which wraps
+//   `objc2-local-authentication` (the LAContext binding). It is cross-platform
+//   (Touch ID / Face ID / Windows Hello / polkit), which aligns with our future
+//   cross-platform goal, and exposes a synchronous `blocking_authenticate` that
+//   internally bridges the async LAContext completion handler for us — so we
+//   don't have to block on a channel ourselves.
 
 #[cfg(target_os = "macos")]
-use security_framework::passwords::{
-    delete_generic_password, generic_password, set_generic_password_options, AccessControlOptions,
-    PasswordOptions,
+use robius_authentication::{
+    AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText,
 };
 
-/// Stable identifiers for the spike keychain item.
-#[cfg(target_os = "macos")]
-const SPIKE_SERVICE: &str = "quickboard-spike";
-#[cfg(target_os = "macos")]
-const SPIKE_ACCOUNT: &str = "biometric-gate";
-#[cfg(target_os = "macos")]
-const SPIKE_SECRET: &[u8] = b"quickboard-ck-spike";
-
-/// SPIKE round-trip: write a user-presence-gated generic password, then read it
-/// back. The read call is what should trigger Touch ID. Returns Ok(true) when
-/// the secret survives the round-trip unchanged.
+/// SPIKE: trigger a Touch ID system prompt via LocalAuthentication (LAContext).
+///
+/// Returns `Ok(true)` when the user authenticates successfully, and `Err(msg)`
+/// on cancel or any failure. Requires NO keychain entitlement and NO
+/// code-signing, so it works under unsigned `tauri dev`.
 #[cfg(target_os = "macos")]
 pub fn biometric_roundtrip() -> Result<bool, String> {
-    // Start clean: ignore "not found" so reruns don't fail on a stale item.
-    // (delete itself does not require user presence.)
-    let _ = delete_generic_password(SPIKE_SERVICE, SPIKE_ACCOUNT);
+    // Build a policy that requests biometrics (Touch ID). We also allow the
+    // device-password fallback so a Mac without an enrolled finger (or after
+    // too many failed scans) can still satisfy the prompt. On macOS the
+    // `BiometricStrength` value is ignored (it only matters on Android).
+    let policy = PolicyBuilder::new()
+        .biometrics(Some(BiometricStrength::Strong))
+        .password(true)
+        .build()
+        .ok_or_else(|| "failed to build a valid authentication policy".to_string())?;
 
-    // Build the create options with a user-presence / biometry access control.
-    // USER_PRESENCE == kSecAccessControlUserPresence: biometry OR passcode.
-    let mut options = PasswordOptions::new_generic_password(SPIKE_SERVICE, SPIKE_ACCOUNT);
-    options.set_access_control_options(AccessControlOptions::USER_PRESENCE);
+    // `Text` is platform-agnostic, so all three platform fields must be
+    // populated even though only `apple` is shown on macOS. The macOS Touch ID
+    // prompt renders this as "<app> is trying to <text>", so phrase it as a
+    // verb phrase / reason.
+    let reason = "Unlock your confidential items";
+    let text = Text {
+        android: AndroidText {
+            title: reason,
+            subtitle: None,
+            description: None,
+        },
+        apple: reason,
+        windows: WindowsText::new_truncated("QuickBoard", reason),
+    };
 
-    // Create the protected item. This write does not prompt for Touch ID.
-    set_generic_password_options(SPIKE_SECRET, options)
-        .map_err(|e| format!("keychain write failed: {e} (code {})", e.code()))?;
-
-    // Read it back. THIS is the call expected to prompt for Touch ID, because
-    // the data is gated by the access-control object created above. We must
-    // rebuild a fresh query (the create options were consumed by the write).
-    let read_back = generic_password(PasswordOptions::new_generic_password(
-        SPIKE_SERVICE,
-        SPIKE_ACCOUNT,
-    ))
-    .map_err(|e| format!("keychain read failed: {e} (code {})", e.code()))?;
-
-    Ok(read_back == SPIKE_SECRET)
+    // `RawContext` is `()` on every current platform. `blocking_authenticate`
+    // shows the system Touch ID prompt and blocks until the user responds.
+    // Success => Ok(()); any failure/cancel => Err(Error) (Debug-only, no
+    // Display), so format it with `{:?}`.
+    match Context::new(()).blocking_authenticate(text, &policy) {
+        Ok(()) => Ok(true),
+        Err(e) => Err(format!("biometric auth failed: {e:?}")),
+    }
 }
 
 /// Non-macOS fallback so the crate still compiles on other targets. The spike is
