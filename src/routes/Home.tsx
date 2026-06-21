@@ -90,11 +90,12 @@ const childVariantsReduced = {
   show: { opacity: 1, transition: { duration: 0.22 } },
 };
 
-// Shared-layout morph timing (pin fly-to-Quick-access + filter FLIP reflow):
-// --dur-slow (0.36s) on the --ease-morph curve. Passed to Framer Motion's
-// `layout` transition. Reduced motion disables `layout` entirely.
+// Shared-layout morph timing (pin fly-to-Quick-access + filter FLIP reflow).
+// Kept snappy (0.24s): the FLIP reflow fires on every search keystroke, so a
+// slower morph made typing feel laggy. --ease-morph curve; reduced motion
+// disables `layout` entirely.
 const MORPH_TRANSITION = {
-  layout: { duration: 0.36, ease: [0.77, 0, 0.175, 1] as const },
+  layout: { duration: 0.24, ease: [0.77, 0, 0.175, 1] as const },
 };
 
 // Wallet deck ↔ list spring (reduced-motion → instant; see usage).
