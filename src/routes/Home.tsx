@@ -93,9 +93,6 @@ const childVariantsReduced = {
 // Bento tiles use static CSS-grid placement — no Framer `layout` morph, which
 // glitched the grid on add/remove/filter. Filtering repositions instantly.
 
-// Wallet deck ↔ list spring (reduced-motion → instant; see usage).
-const DECK_SPRING = { type: "spring" as const, stiffness: 360, damping: 32 };
-
 export function Home() {
   const {
     items,
@@ -685,18 +682,24 @@ function CategoryGroup({
   flashId: string | null;
   onChanged: () => void | Promise<void>;
 }) {
-  const transition = reduce ? { duration: 0 } : DECK_SPRING;
-
   return (
-    <motion.div variants={cardVariants} style={{ marginBottom: "1.5rem" }}>
-      <AnimatePresence mode="wait" initial={false}>
+    <motion.div
+      variants={cardVariants}
+      layout={reduce ? undefined : true}
+      transition={reduce ? undefined : { layout: { duration: 0.28, ease: [0.23, 1, 0.32, 1] } }}
+      style={{ marginBottom: "1.5rem", position: "relative" }}
+    >
+      {/* The deck↔list swap crossfades with a small blur bridge (two different
+          layouts read as one morph), while `layout` above animates the height
+          change both ways so nothing snaps. Rows stagger in on expand. */}
+      <AnimatePresence initial={false} mode="popLayout">
         {expanded ? (
           <motion.div
             key="expanded"
-            initial={reduce ? false : { opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
-            transition={transition}
+            initial={reduce ? false : { opacity: 0, filter: "blur(4px)" }}
+            animate={{ opacity: 1, filter: "blur(0px)" }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, filter: "blur(4px)" }}
+            transition={{ duration: reduce ? 0 : 0.2, ease: [0.23, 1, 0.32, 1] }}
           >
             {/* Header shown only while expanded — click to collapse to the deck. */}
             <button
@@ -743,10 +746,16 @@ function CategoryGroup({
                 <ChevronDown size={17} />
               </span>
             </button>
-            <div className="qb-group">
+            <motion.div
+              className="qb-group"
+              variants={reduce ? undefined : containerVariants}
+              initial={reduce ? false : "hidden"}
+              animate={reduce ? false : "show"}
+            >
               {rows.map((item) => (
-                <div
+                <motion.div
                   key={item.id}
+                  variants={reduce ? undefined : cardVariants}
                   data-item-id={item.id}
                   style={{ position: "relative" }}
                 >
@@ -755,17 +764,17 @@ function CategoryGroup({
                     onChanged={onChanged}
                     justAdded={item.id === flashId}
                   />
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           </motion.div>
         ) : (
           <motion.div
             key="deck"
-            initial={reduce ? false : { opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
-            transition={transition}
+            initial={reduce ? false : { opacity: 0, filter: "blur(4px)" }}
+            animate={{ opacity: 1, filter: "blur(0px)" }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.985, filter: "blur(4px)" }}
+            transition={{ duration: reduce ? 0 : 0.18, ease: [0.23, 1, 0.32, 1] }}
           >
             <CategoryDeck
               category={category}
