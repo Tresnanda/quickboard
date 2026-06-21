@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { FileText, KeyRound, Lock } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { categoryColor } from "../lib/category-color";
@@ -50,6 +50,14 @@ const childVariantsReduced = {
   show: { opacity: 1, transition: { duration: 0.22 } },
 };
 
+// Shared-layout morph timing (pin fly-to-Quick-access + filter FLIP reflow):
+// --dur-slow (0.36s) on the --ease-morph curve. Passed to Framer Motion's
+// `layout` transition. Reduced motion disables `layout` entirely (instant
+// reposition / cross-fade), so this curve only applies to the full path.
+const MORPH_TRANSITION = {
+  layout: { duration: 0.36, ease: [0.77, 0, 0.175, 1] as const },
+};
+
 export function Home() {
   const { items, query, reload, loading, error } = useItems();
   const reduce = useReducedMotion();
@@ -91,9 +99,13 @@ export function Home() {
 
   const pinned = useMemo(() => filtered.filter((i) => i.pinned), [filtered]);
 
+  // IA: pinned items live ONLY in Quick access; the Library category groups
+  // show NON-pinned items (no duplication). Toggling `pinned` moves an item
+  // between the two regions, which the shared `layoutId` morphs.
   const grouped = useMemo(() => {
     const map = new Map<string, Item[]>();
     for (const item of filtered) {
+      if (item.pinned) continue;
       const list = map.get(item.category) ?? [];
       list.push(item);
       map.set(item.category, list);
@@ -170,6 +182,10 @@ export function Home() {
         </div>
       )}
 
+      {/* Quick access + Library share one LayoutGroup so a pinned item morphs
+          (shared layoutId) between its Library row and its Quick-access card,
+          and library rows FLIP-reflow when the filter changes. */}
+      <LayoutGroup id="home-items">
       {/* Quick access */}
       {pinned.length > 0 && (
         <section style={{ marginBottom: "2.25rem" }}>
@@ -185,7 +201,12 @@ export function Home() {
             }}
           >
             {pinned.map((item) => (
-              <QuickCard key={item.id} item={item} variants={cardVariants} />
+              <QuickCard
+                key={item.id}
+                item={item}
+                variants={cardVariants}
+                reduce={!!reduce}
+              />
             ))}
           </motion.div>
         </section>
@@ -264,7 +285,17 @@ export function Home() {
                 </div>
 
                 {rows.map((item) => (
-                  <motion.div key={item.id} variants={cardVariants}>
+                  <motion.div
+                    key={item.id}
+                    // Shared id with the Quick-access card: pin toggle morphs
+                    // this row into / out of the grid. `layout` also drives the
+                    // FLIP reflow when the search filter changes the visible set.
+                    layoutId={reduce ? undefined : item.id}
+                    layout={reduce ? false : "position"}
+                    variants={cardVariants}
+                    transition={MORPH_TRANSITION}
+                    style={{ position: "relative" }}
+                  >
                     <ItemRow
                       item={item}
                       onChanged={reload}
@@ -277,6 +308,7 @@ export function Home() {
           </motion.div>
         )}
       </section>
+      </LayoutGroup>
 
       {/* Meta footer */}
       {items.length > 0 && (
@@ -319,14 +351,21 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function QuickCard({
   item,
   variants,
+  reduce,
 }: {
   item: Item;
   variants: typeof childVariants | typeof childVariantsReduced;
+  reduce: boolean;
 }) {
   const isText = item.kind === "Text";
   return (
     <motion.div
+      // Shared id with the Library row so a pin toggle morphs the element
+      // between the row and this card shape. Inner content cross-fades.
+      layoutId={reduce ? undefined : item.id}
+      layout={reduce ? false : true}
       variants={variants}
+      transition={MORPH_TRANSITION}
       style={{
         position: "relative",
         display: "flex",
@@ -340,7 +379,9 @@ function QuickCard({
         minWidth: 0,
       }}
     >
-      <div
+      <motion.div
+        // Cross-fade the differing inner bits while the outer box morphs.
+        layout={reduce ? false : "position"}
         style={{
           display: "flex",
           alignItems: "center",
@@ -375,8 +416,8 @@ function QuickCard({
             <Lock size={13} />
           </span>
         )}
-      </div>
-      <div style={{ minWidth: 0 }}>
+      </motion.div>
+      <motion.div layout={reduce ? false : "position"} style={{ minWidth: 0 }}>
         <div
           style={{
             fontSize: "0.8125rem",
@@ -399,7 +440,7 @@ function QuickCard({
         >
           {isText ? "copy" : "drag out"}
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }

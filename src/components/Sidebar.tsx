@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { LayoutGrid, Lock, Plus, Search, Settings } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { categoryColor } from "../lib/category-color";
 
 const navItemBase: React.CSSProperties = {
+  position: "relative",
   display: "flex",
   alignItems: "center",
   gap: "0.625rem",
@@ -18,15 +20,68 @@ const navItemBase: React.CSSProperties = {
   letterSpacing: "-0.01em",
 };
 
+// Active link: ink text + weight. The "pill" background is now drawn by the
+// shared-layout indicator (motion.div, layoutId="nav-indicator") so it can
+// slide between links; we no longer paint a static background here.
 const navItemActive: React.CSSProperties = {
   ...navItemBase,
   color: "var(--qb-ink)",
   fontWeight: 600,
-  background: "var(--qb-hair)",
 };
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+
+/**
+ * Sliding active-nav indicator. Rendered only inside the active link; the
+ * shared `layoutId` makes Framer Motion morph its position as the active
+ * route changes (Home <-> Settings). Reduced motion -> snap (layout off).
+ */
+function NavIndicator({ reduce }: { reduce: boolean }) {
+  return (
+    <motion.div
+      // Reduced motion: drop the shared layoutId so the pill snaps to the
+      // active link instead of sliding between routes.
+      layoutId={reduce ? undefined : "nav-indicator"}
+      layout={!reduce}
+      transition={{ duration: 0.22, ease: EASE_OUT }}
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "var(--qb-hair)",
+        borderRadius: "8px",
+        zIndex: 0,
+      }}
+    />
+  );
+}
+
+/** Nav link contents sit above the sliding indicator. */
+function NavContent({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        position: "relative",
+        zIndex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: "0.625rem",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function Sidebar() {
   const { items, categories, query, setQuery, setAddOpen } = useItems();
+  const reduce = !!useReducedMotion();
+
+  // Active route drives which link hosts the sliding indicator.
+  const pathname = useRouterState({
+    select: (s) => s.location.pathname,
+  });
+  const homeActive = pathname === "/";
+  const settingsActive = pathname.startsWith("/settings");
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -162,37 +217,41 @@ export function Sidebar() {
         </kbd>
       </button>
 
-      {/* Nav */}
-      <nav
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.125rem",
-          marginBottom: "1.25rem",
-        }}
-      >
-        <Link
-          to="/"
-          className="qb-press"
-          style={navItemBase}
-          activeProps={{ style: navItemActive }}
-          inactiveProps={{ style: navItemBase }}
-          activeOptions={{ exact: true }}
+      {/* Nav — sliding indicator shared across links via layoutId */}
+      <LayoutGroup id="sidebar-nav">
+        <nav
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.125rem",
+            marginBottom: "1.25rem",
+          }}
         >
-          <LayoutGrid size={16} />
-          Home
-        </Link>
-        <Link
-          to="/settings"
-          className="qb-press"
-          style={navItemBase}
-          activeProps={{ style: navItemActive }}
-          inactiveProps={{ style: navItemBase }}
-        >
-          <Settings size={16} />
-          Settings
-        </Link>
-      </nav>
+          <Link
+            to="/"
+            className="qb-press"
+            style={homeActive ? navItemActive : navItemBase}
+            activeOptions={{ exact: true }}
+          >
+            {homeActive && <NavIndicator reduce={reduce} />}
+            <NavContent>
+              <LayoutGrid size={16} />
+              Home
+            </NavContent>
+          </Link>
+          <Link
+            to="/settings"
+            className="qb-press"
+            style={settingsActive ? navItemActive : navItemBase}
+          >
+            {settingsActive && <NavIndicator reduce={reduce} />}
+            <NavContent>
+              <Settings size={16} />
+              Settings
+            </NavContent>
+          </Link>
+        </nav>
+      </LayoutGroup>
 
       {/* Categories */}
       <div
