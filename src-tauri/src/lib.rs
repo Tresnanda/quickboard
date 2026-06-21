@@ -1,3 +1,5 @@
+use tauri::Manager;
+
 // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
 mod confidential;
 
@@ -10,6 +12,9 @@ pub mod keyring_dek;
 // Plan 2, Task 6: item data model and encrypted SQLite store.
 pub mod model;
 pub mod store;
+
+// Plan 2, Task 7: core IPC commands wired to the encrypted store.
+pub mod commands;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -57,11 +62,36 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // SPIKE: throwaway drag-out test, removed in Plan 2
         .plugin(tauri_plugin_drag::init())
+        .setup(|app| {
+            // Load (or create) the Data Encryption Key from the OS keyring.
+            let key = keyring_dek::load_or_create_dek("quickboard")
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+
+            // Resolve the app data directory and ensure it exists.
+            let app_data_dir = app.path().app_data_dir()
+                .map_err(|e| Box::<dyn std::error::Error>::from(e.to_string()))?;
+            std::fs::create_dir_all(&app_data_dir)
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+
+            // Open the encrypted SQLite store.
+            let db_path = app_data_dir.join("quickboard.db");
+            let db_path_str = db_path.to_string_lossy().into_owned();
+            let store = store::Store::open(&db_path_str, key)
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+
+            // Register the store as managed state (wrapped in a Mutex for thread safety).
+            app.manage(std::sync::Mutex::new(store));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             spike_drag_paths,
             // SPIKE: throwaway Touch ID-gate feasibility, removed/replaced in Plan 2.
-            spike_biometric
+            spike_biometric,
+            // Plan 2, Task 7: core IPC commands wired to the encrypted store.
+            commands::list_items,
+            commands::add_text_item,
+            commands::get_text_value,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
