@@ -813,7 +813,7 @@ kbd {
     -moz-osx-font-smoothing: grayscale;
   }
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui;
     color: var(--qb-ink);
     /* The thin neutral canvas shows through the two-card shell's gaps/margins. */
     background: var(--canvas);

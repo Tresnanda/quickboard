@@ -9,6 +9,7 @@ import {
 import {
   ChevronDown,
   FileText,
+  Inbox,
   KeyRound,
   Lock,
   Plus,
@@ -25,7 +26,6 @@ import { ItemMenu } from "../components/ItemMenu";
 import { ItemRow } from "../components/ItemRow";
 import { RollNumber } from "../components/RollNumber";
 import { DitherArt } from "../components/DitherArt";
-import { GradientBrand } from "../components/GradientBrand";
 import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
@@ -569,8 +569,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Empty-state panel — a brand moment. A gradient-shader panel (the ONLY place
- * the gradient appears, alongside the minting sheet) + a Plus Jakarta headline.
+ * Empty-state panel — minimal & MONOCHROME (ink-first). A small Lucide icon in a
+ * neutral `--hair` tile, the headline (Plus Jakarta), a muted subline, and — for
+ * the whole-app empty state — a "Mint your first item" button. NO gradient: the
+ * gradient shader is reserved for the ONE minting-sheet brand panel.
  */
 function EmptyState({
   title,
@@ -590,21 +592,35 @@ function EmptyState({
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
-        gap: "1.25rem",
-        padding: "2.5rem 1.5rem 3rem",
+        gap: "1rem",
+        padding: "2.75rem 1.5rem 3rem",
         background: "var(--card)",
         border: "1px solid var(--border)",
         borderRadius: "var(--r-card)",
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      {/* Gradient brand panel (image outline keeps it from floating). */}
-      <GradientBrand height={150} radius="20px" style={{ width: "min(100%, 320px)" }} />
+      {/* Neutral monochrome tile + small icon. */}
+      <span
+        aria-hidden="true"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "var(--r-tile)",
+          background: "var(--hair)",
+          color: "var(--muted)",
+        }}
+      >
+        <Inbox size={20} strokeWidth={1.75} />
+      </span>
 
       <div style={{ maxWidth: "24rem" }}>
         <div
           style={{
-            fontSize: "1.375rem",
+            fontSize: "1.0625rem",
             fontWeight: 700,
             color: "var(--ink)",
             letterSpacing: "-0.02em",
@@ -614,8 +630,8 @@ function EmptyState({
         </div>
         <p
           style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.875rem",
+            margin: "0.4rem 0 0",
+            fontSize: "0.8125rem",
             color: "var(--muted)",
             lineHeight: 1.5,
           }}
@@ -635,6 +651,7 @@ function EmptyState({
             gap: "0.4rem",
             minHeight: "40px",
             padding: "0.55rem 1rem",
+            marginTop: "0.25rem",
             background: "var(--ink)",
             color: "#fff",
             border: "none",
