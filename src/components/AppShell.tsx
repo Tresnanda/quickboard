@@ -1,5 +1,6 @@
 import { Outlet } from "@tanstack/react-router";
 import { Sidebar } from "./Sidebar";
+import { AddItemDialog } from "./AddItemDialog";
 
 export function AppShell() {
   return (
@@ -23,6 +24,8 @@ export function AppShell() {
       >
         <Outlet />
       </main>
+      {/* Mounted once; controlled by useItems().addOpen (Sidebar's Add button). */}
+      <AddItemDialog />
     </div>
   );
 }

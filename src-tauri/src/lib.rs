@@ -65,6 +65,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // SPIKE: throwaway drag-out test, removed in Plan 2
         .plugin(tauri_plugin_drag::init())
+        // Plan 2, Task 6: native file picker for the Add-item dialog.
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Load (or create) the Data Encryption Key from the OS keyring.
             let key = keyring_dek::load_or_create_dek("quickboard")

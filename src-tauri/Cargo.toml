@@ -24,6 +24,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "=1.0.128"
 tauri-plugin-drag = "=2.1.1"
 
+# Native file picker (Plan 2, Task 6): backs the Add-item dialog's "Choose file"
+# button via the JS @tauri-apps/plugin-dialog open(). First-party Tauri plugin;
+# exact-pinned to match the JS plugin (2.7.1) per supply-chain rules.
+tauri-plugin-dialog = "=2.7.1"
+
 # Crypto core (Plan 2, Task 4): AES-256-GCM authenticated encryption.
 # Exact-pinned per supply-chain rules. aes-gcm 0.10.3 + rand 0.8.5 are a
 # known-compatible stable pair (aes-gcm's getrandom feature aligns with rand 0.8).
