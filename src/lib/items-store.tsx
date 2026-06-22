@@ -17,6 +17,9 @@ type ItemsState = {
   setQuery: (q: string) => void;
   categoryFilter: string | null;
   setCategoryFilter: (category: string | null) => void;
+  /** "Pinned" sidebar view — show only favorited items. */
+  pinnedOnly: boolean;
+  setPinnedOnly: (v: boolean) => void;
   /** Item the sidebar asked Home to scroll to / highlight (one-shot). */
   selectedItemId: string | null;
   setSelectedItemId: (id: string | null) => void;
@@ -34,6 +37,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,6 +72,8 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       setQuery,
       categoryFilter,
       setCategoryFilter,
+      pinnedOnly,
+      setPinnedOnly,
       selectedItemId,
       setSelectedItemId,
       addOpen,
@@ -81,6 +87,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       categories,
       query,
       categoryFilter,
+      pinnedOnly,
       selectedItemId,
       addOpen,
       reload,

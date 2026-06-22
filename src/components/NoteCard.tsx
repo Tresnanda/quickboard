@@ -119,8 +119,12 @@ export function NoteCard({ item, onChanged }: NoteCardProps) {
   }
 
   return (
+    // Outer = static multicol item (never transforms — transforming a column
+    // item re-packs the column and causes a hover flicker loop). Inner carries
+    // all the lift/rotation/shadow.
+    <div className="qb-note">
     <div
-      className="qb-note"
+      className="qb-note__inner"
       style={
         {
           "--catColor": catColor,
@@ -246,6 +250,7 @@ export function NoteCard({ item, onChanged }: NoteCardProps) {
       >
         <ItemMenu item={item} onChanged={onChanged} />
       </span>
+    </div>
     </div>
   );
 }

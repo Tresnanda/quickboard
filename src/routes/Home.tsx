@@ -45,6 +45,7 @@ export function Home() {
     loading,
     error,
     categoryFilter,
+    pinnedOnly,
     setAddOpen,
   } = useItems();
   const now = useMemo(() => new Date(), []);
@@ -72,6 +73,7 @@ export function Home() {
       (i) =>
         matchesQuery(i, query) &&
         (categoryFilter === null || i.category === categoryFilter) &&
+        (!pinnedOnly || i.pinned) &&
         matchesKind(i, kindFilter),
     );
     return list.sort((a, b) => {
@@ -80,7 +82,7 @@ export function Home() {
         b.last_used_at - a.last_used_at || b.created_at - a.created_at
       );
     });
-  }, [items, query, categoryFilter, kindFilter]);
+  }, [items, query, categoryFilter, pinnedOnly, kindFilter]);
 
   const confidentialCount = useMemo(
     () => items.filter((i) => i.confidential).length,
@@ -88,7 +90,7 @@ export function Home() {
   );
 
   const isFiltered =
-    !!query || kindFilter !== "all" || categoryFilter !== null;
+    !!query || kindFilter !== "all" || categoryFilter !== null || pinnedOnly;
 
   const tabs = [
     ["all", "All"],

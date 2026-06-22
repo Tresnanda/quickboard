@@ -627,22 +627,26 @@ kbd {
   }
 }
 
-/* --- A sticky note --- */
+/* --- A sticky note. The OUTER .qb-note is a STATIC multicol item — it never
+   transforms, because transforming a column item re-packs the whole column and
+   creates a hover flicker loop. All lift/rotation/shadow live on the INNER. --- */
 .qb-note {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
   page-break-inside: avoid;
   margin-bottom: 18px;
+}
+.qb-note__inner {
+  position: relative;
   border-radius: 13px;
   padding: 15px 15px 12px;
-  position: relative;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04),
     0 10px 22px -12px rgba(0, 0, 0, 0.28);
   transition: transform var(--dur-std) var(--ease-out),
     box-shadow var(--dur-std) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  .qb-note:hover {
+  .qb-note:hover .qb-note__inner {
     transform: rotate(0deg) translateY(-3px) !important;
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.05),
       0 22px 40px -16px rgba(0, 0, 0, 0.34);
@@ -869,7 +873,7 @@ kbd {
     transition: none !important;
   }
   /* Sticky notes: keep the shadow shift, kill all transform/lift/rotation. */
-  .qb-note {
+  .qb-note__inner {
     transition: box-shadow var(--dur-std) var(--ease-out);
     transform: none !important;
   }
@@ -884,7 +888,7 @@ kbd {
     .qb-quick-card:hover {
       transform: none;
     }
-    .qb-note:hover {
+    .qb-note:hover .qb-note__inner {
       transform: none !important;
     }
   }
