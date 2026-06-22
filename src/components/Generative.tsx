@@ -1,15 +1,14 @@
 import { useMemo } from "react";
 import { ShieldCheck } from "lucide-react";
-import { DitherArt } from "./DitherArt";
 
 /**
  * Small shared generative-visual primitives for the premium pass.
  *
  *   - <GenerativeAvatar>  — a deterministic gradient avatar hashed from a seed
  *     string (stable angle + palette), with the feel-better hairline outline.
- *   - <ConfidentialFrost> — a frosted/dithered blur over a value preview with
- *     an amber "Touch ID to reveal" affordance. Structured so the real unlock
- *     (R3) can animate the blur away by toggling `revealed`.
+ *   - <ConfidentialFrost> — a pure CSS-blurred value preview with an amber
+ *     "Touch ID to reveal" affordance. The `revealed` prop unblurs in place
+ *     (R3); the in-card reveal swaps the real value in (see useReveal).
  *
  * All code-generated, monochrome-friendly, no external assets.
  */
@@ -75,17 +74,15 @@ export function GenerativeAvatar({
 
 /**
  * Frosted confidential value preview. Renders the masked placeholder under a
- * CSS blur + a faint dither overlay, with an amber Touch-ID affordance beneath.
+ * pure CSS blur, with an amber Touch-ID affordance beneath.
  *
- * `revealed` is wired for the future R3 unlock: when it flips to true the blur
- * animates away (CSS transition on `filter`). For now it stays frosted.
+ * `revealed` unblurs in place (CSS transition on `filter`) — the in-card reveal
+ * (R3) toggles it once the value unlocks behind Touch ID.
  */
 export function ConfidentialFrost({
   revealed = false,
-  width = 120,
 }: {
   revealed?: boolean;
-  width?: number;
 }) {
   return (
     <div>
@@ -115,27 +112,6 @@ export function ConfidentialFrost({
         >
           ••••••••••••
         </span>
-        {/* Subtle dither texture sits over the blur, selling the "frost". */}
-        {!revealed && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              pointerEvents: "none",
-              opacity: 0.5,
-              mixBlendMode: "multiply",
-            }}
-          >
-            <DitherArt
-              width={width}
-              height={16}
-              density={0.85}
-              seed="confidential-frost"
-              style={{ width: "100%", height: "16px" }}
-            />
-          </span>
-        )}
       </div>
       <div
         style={{

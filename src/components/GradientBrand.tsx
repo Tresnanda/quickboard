@@ -3,8 +3,8 @@ import gradientDither from "../assets/gradient-dither.png";
 /**
  * GradientBrand — the ONE place the user's `gradient-dither.png` shader is
  * allowed. It is a BRAND-ONLY accent used in EXACTLY one spot: the minting-sheet
- * brand panel (`AddItemDialog`). It must NEVER appear on item seals, icons, bento
- * tiles, covers, or empty states — those stay ink-first monochrome (`DitherArt`).
+ * brand panel (`AddItemDialog`). It must NEVER appear on item seals, icons, note
+ * tiles, covers, or empty states — those stay clean ink-first glyph tiles.
  *
  * Renders the gradient image as a `background-image` cover surface with a subtle
  * pure-black image outline (so it doesn't float borderless) and an optional

@@ -4,10 +4,9 @@ import { getTextValue } from "./ipc";
 const COPY_REVERT_MS = 1200;
 
 /**
- * Shared copy-to-clipboard state used by both the Library rows and the
- * Quick-access cards, so the copy -> Check morph behaves identically in both
- * places. Wires `getTextValue` -> clipboard and exposes the `copied` flag that
- * drives the <CopyMorph/> swap.
+ * Shared copy-to-clipboard state used by the sticky NoteCards. Wires
+ * `getTextValue` -> clipboard and exposes the `copied` flag that drives the
+ * brief "Copied" affordance.
  *
  * R3: gate copy/reveal behind Touch ID (confidential items unlock here).
  */

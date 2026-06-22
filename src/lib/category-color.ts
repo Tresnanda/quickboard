@@ -1,22 +1,55 @@
-// Ink-first / monochrome (R2.5). The earlier multi-color category palette is
-// REMOVED from general use: tiles, dots and indicators are now neutral ink/gray
-// so the UI reads ~95% grayscale like the references. Color is reserved for a
-// rare, genuinely-meaningful signal (e.g. the "Local · encrypted" lock) and is
-// NOT keyed off category here.
+// Pinboard color (R-pinboard). The sticky-note board is the new design
+// direction: notes carry a SOFT warm wash and a colored pushpin keyed off the
+// item's category. Color here is the default category tint (a calm, premium
+// palette); per-note custom colors are future personalization. Uncategorised
+// items fall back to a neutral paper.
 
-/**
- * Neutral dot color for a category indicator. Monochrome — a subtle gray, the
- * same for every category (no saturated reds/teals/violets). Kept as a function
- * so call sites don't need to change.
- */
-export function categoryColor(_name?: string): string {
-  return "var(--faint)";
+// A small, calm palette — saturated enough to read as "this note is Finance",
+// soft enough to stay premium against the warm #fbfaf7 paper. Deterministically
+// assigned from the category name so the same category always gets the same hue.
+const PALETTE = [
+  "#7a8cff", // indigo
+  "#e0a01f", // amber
+  "#2faf54", // green
+  "#c98bb6", // mauve
+  "#3b6fe2", // blue
+  "#7a3be2", // violet
+  "#e2683b", // coral
+  "#0891b2", // cyan
+];
+
+// FNV-1a 32-bit hash → stable palette index per category name.
+function hash(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+const NEUTRAL = "#a1a1aa"; // --faint, used for uncategorised paper/pin.
+
+function isUncategorised(name?: string): boolean {
+  if (!name) return true;
+  const n = name.trim().toLowerCase();
+  return n.length === 0 || n === "uncategorized" || n === "uncategorised";
 }
 
 /**
- * Monochrome icon-tile treatment. Neutral gray surface + ink glyph, NO colored
- * background and NO colored border. `confidential` shifts to a subtle ink lock
- * treatment (a touch darker), never an amber/orange tile.
+ * The note's category color — drives the pushpin gradient and the soft paper
+ * tint (`color-mix(... var(--catColor) 14% ...)`). Uncategorised items get a
+ * neutral gray so they read as plain paper.
+ */
+export function categoryColor(name?: string): string {
+  if (isUncategorised(name)) return NEUTRAL;
+  return PALETTE[hash(name as string) % PALETTE.length];
+}
+
+/**
+ * Monochrome icon-tile treatment (legacy helper kept for any non-board surface).
+ * Neutral gray surface + ink glyph; `confidential` shifts to a subtly deeper ink
+ * wash, never an amber/orange tile.
  */
 export function categoryTile(
   _name?: string,
@@ -28,7 +61,6 @@ export function categoryTile(
 } {
   if (confidential) {
     return {
-      // Subtle ink wash for the lock — still monochrome, just slightly deeper.
       bg: "rgba(11, 11, 12, 0.06)",
       border: "rgba(11, 11, 12, 0.12)",
       fg: "var(--ink)",

@@ -15,7 +15,6 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
-import { DitherArt } from "./DitherArt";
 import { GradientBrand } from "./GradientBrand";
 import { cn } from "../lib/utils";
 
@@ -43,8 +42,8 @@ function previewValue(raw: string): string {
  *  - LEFT  = the form (Label, Value / file picker, Text·File toggle, Category
  *    combobox, Confidential switch) + the "Mint item" submit.
  *  - RIGHT = a LIVE PREVIEW item card that updates as you type — the item's
- *    MONOCHROME `DitherArt` seal, label, a category pill, a value preview — plus
- *    a gradient-shader brand art band with a small "quickboard" wordmark.
+ *    clean glyph tile, label, a category pill, a value preview — plus a
+ *    gradient-shader brand art band with a small "quickboard" wordmark.
  *
  * The slide-up / slide-down is shadcn's data-state Tailwind animation (mounts +
  * unmounts reliably, driven by the `open` prop). NO Framer Motion here.
@@ -135,7 +134,6 @@ export function AddItemDialog() {
   // --- Live-preview derived values (mirror what the real ItemRow shows) ---
   const previewLabel = trimmedLabel || "Untitled item";
   const previewCategory = category.trim() || "Uncategorized";
-  const seedLabel = trimmedLabel || "new-item";
   const previewMeta =
     type === "File"
       ? pickedPath
@@ -372,20 +370,7 @@ export function AddItemDialog() {
                         : "var(--hair)",
                     }}
                   >
-                    {/* MONOCHROME seeded dither seal — NEVER the gradient. */}
-                    <DitherArt
-                      width={38}
-                      height={38}
-                      density={0.95}
-                      seed={seedLabel}
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "38px",
-                        height: "38px",
-                        opacity: 0.32,
-                      }}
-                    />
+                    {/* Clean glyph tile — no dither (R-pinboard). */}
                     <span className="relative z-[1]">
                       {confidential ? (
                         <Lock size={16} />
