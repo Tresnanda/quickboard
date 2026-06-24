@@ -10,7 +10,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        border: "hsl(var(--border))",
+        // shadcn/Radix primitive tokens (HSL vars renamed where they'd clash
+        // with the Soft Paper hex vars of the same short name).
+        border: "hsl(var(--border-hsl))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
@@ -28,7 +30,7 @@ export default {
           foreground: "hsl(var(--destructive-foreground))",
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
+          DEFAULT: "hsl(var(--muted-hsl))",
           foreground: "hsl(var(--muted-foreground))",
         },
         accent: {
@@ -40,17 +42,39 @@ export default {
           foreground: "hsl(var(--popover-foreground))",
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          DEFAULT: "hsl(var(--card-bg))",
+          foreground: "hsl(var(--foreground))",
         },
+        // Soft Paper convenience tokens.
+        ink: "var(--ink)",
+        board: "var(--board)",
+        sidebar: "var(--sidebar)",
+      },
+      boxShadow: {
+        card: "var(--shadow-card)",
+        pill: "var(--shadow-pill)",
+        pop: "var(--shadow-pop)",
+        modal: "var(--shadow-modal)",
+        ink: "var(--shadow-ink)",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        card: "var(--r-card)",
+        tile: "var(--r-tile)",
+        pill: "var(--r-pill)",
+        modal: "var(--r-modal)",
+        sheet: "var(--r-sheet)",
+        inner: "var(--r-inner)",
       },
       fontFamily: {
         sans: ["Plus Jakarta Sans", "sans-serif"],
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(0.23, 1, 0.32, 1)",
+        "in-out": "cubic-bezier(0.77, 0, 0.175, 1)",
+        drawer: "cubic-bezier(0.32, 0.72, 0, 1)",
       },
       keyframes: {
         "accordion-down": {

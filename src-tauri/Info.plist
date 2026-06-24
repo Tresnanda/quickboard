@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- macOS 26 Tahoe reads the dynamic Liquid Glass icon (light/dark/mono) from
+       Assets.car via this key. macOS < 26 falls back to CFBundleIconFile (icon.icns),
+       which Tauri still sets, so both are covered. The value must match the
+       `--app-icon` name used when compiling the .icon with actool. -->
+  <key>CFBundleIconName</key>
+  <string>logo_glass</string>
+</dict>
+</plist>

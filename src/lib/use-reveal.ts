@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getTextValue } from "./ipc";
-
-/** How long a revealed confidential value stays on screen before auto-hiding. */
-const REVEAL_MS = 12_000;
+import { getSettings } from "./settings";
 
 /**
  * Touch-ID-gated in-place reveal for a confidential item.
@@ -27,6 +25,17 @@ export function useReveal(itemId: string) {
   // Clear any pending auto-hide on unmount.
   useEffect(() => clearTimer, []);
 
+  // Security: hide a revealed secret when the window loses focus (if enabled).
+  useEffect(() => {
+    if (value === null || !getSettings().lockOnBlur) return;
+    const onBlur = () => {
+      clearTimer();
+      setValue(null);
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, [value]);
+
   function hide() {
     clearTimer();
     setValue(null);
@@ -46,7 +55,7 @@ export function useReveal(itemId: string) {
       timer.current = window.setTimeout(() => {
         setValue(null);
         timer.current = null;
-      }, REVEAL_MS);
+      }, getSettings().autoHideSeconds * 1000);
     } catch {
       /* cancelled or failed — stay hidden */
     } finally {

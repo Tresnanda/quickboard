@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import { getTextValue } from "./ipc";
+import { useToast } from "../components/Toast";
 
 const COPY_REVERT_MS = 1200;
 
@@ -13,6 +15,7 @@ const COPY_REVERT_MS = 1200;
 export function useCopy(itemId: string) {
   const [copied, setCopied] = useState(false);
   const revertTimer = useRef<number | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     return () => {
@@ -27,6 +30,7 @@ export function useCopy(itemId: string) {
       const value = await getTextValue(itemId);
       await navigator.clipboard.writeText(value);
       setCopied(true);
+      toast({ message: "Copied to clipboard", icon: createElement(Check, { size: 14, strokeWidth: 2.6 }), tone: "green" });
       // Interruptible: a fresh click restarts the auto-revert timer.
       if (revertTimer.current !== null) {
         window.clearTimeout(revertTimer.current);

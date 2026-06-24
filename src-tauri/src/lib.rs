@@ -1,5 +1,3 @@
-use tauri::Manager;
-
 // Retained for Plan 3 confidential gate (biometric_roundtrip used by Plan 3 unlock flow).
 mod confidential;
 
@@ -19,15 +17,41 @@ pub mod blobs;
 // Plan 2, Task 7: core IPC commands wired to the encrypted store.
 pub mod commands;
 
+// Phase 1 "Summon anywhere": macOS focus capture/restore for the panel.
+pub mod summon;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Launch-at-login so the global summon works without opening the app first.
+        // The login item launches with `--hidden` → no main window pops up at login.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         // Drag plugin: used by the real app for file drag-out from items.
         .plugin(tauri_plugin_drag::init())
         // Plan 2, Task 6: native file picker for the Add-item dialog.
         .plugin(tauri_plugin_dialog::init())
+        // Phase 1 "Summon anywhere": a global hotkey toggles the quick-find panel.
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    if shortcut.matches(Modifiers::ALT | Modifiers::SHIFT, Code::Space) {
+                        toggle_tray(app);
+                    } else if shortcut.matches(Modifiers::ALT, Code::Space) {
+                        toggle_summon(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
+            use tauri::Manager;
             // Load (or create) the Data Encryption Key from the OS keyring.
             let key = keyring_dek::load_or_create_dek("quickboard")
                 .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
@@ -46,6 +70,91 @@ pub fn run() {
 
             // Register the store as managed state (wrapped in a Mutex for thread safety).
             app.manage(std::sync::Mutex::new(store));
+
+            // Global hotkey: ⌥Space summons the quick-find panel over any app.
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+                let summon = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+                let _ = app.global_shortcut().register(summon);
+                let tray = Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::Space);
+                let _ = app.global_shortcut().register(tray);
+            }
+
+            // Turn the panel into a non-activating NSPanel (floats over all spaces /
+            // fullscreen, receives keyboard without activating the app).
+            if let Some(summon) = app.get_webview_window("summon") {
+                crate::summon::make_panel(&summon);
+            }
+            // The floating tray is a non-KEY panel so clicking it never steals focus.
+            if let Some(tray) = app.get_webview_window("tray") {
+                crate::summon::make_float_panel(&tray);
+            }
+
+            // Background clipboard-history watcher (idle until the opt-in setting turns it on).
+            crate::commands::start_clipboard_watch(app.handle().clone());
+
+            // Inset the traffic lights so they sit roomily in the sidebar card, and
+            // keep them there across resizes (macOS re-lays them out otherwise).
+            if let Some(main) = app.get_webview_window("main") {
+                crate::summon::position_traffic_lights(&main, 18.0, 18.0);
+                let mw = main.clone();
+                main.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::Resized(_)) {
+                        crate::summon::position_traffic_lights(&mw, 18.0, 18.0);
+                    }
+                });
+            }
+
+            // Menu-bar tray — quickboard lives here as a background utility.
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+                use tauri::tray::TrayIconBuilder;
+                let open_i = MenuItem::with_id(app, "tray_open", "Open quickboard", true, None::<&str>)?;
+                let summon_i = MenuItem::with_id(app, "tray_summon", "Summon  (⌥Space)", true, None::<&str>)?;
+                let shelf_i = MenuItem::with_id(app, "tray_shelf", "Show tray  (⌥⇧Space)", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "tray_quit", "Quit quickboard", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&open_i, &summon_i, &shelf_i, &PredefinedMenuItem::separator(app)?, &quit_i])?;
+                let mut tray = TrayIconBuilder::with_id("main")
+                    .tooltip("quickboard")
+                    .menu(&menu)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "tray_open" => {
+                            if let Some(main) = app.get_webview_window("main") {
+                                let _ = main.show();
+                                let _ = main.set_focus();
+                            }
+                        }
+                        "tray_summon" => toggle_summon(app),
+                        "tray_shelf" => {
+                            let _ = commands::show_tray(app.clone());
+                        }
+                        "tray_quit" => app.exit(0),
+                        _ => {}
+                    });
+                if let Some(icon) = app.default_window_icon() {
+                    tray = tray.icon(icon.clone());
+                }
+                let _tray = tray.build(app)?;
+            }
+
+            // Background-app behavior: the main window starts hidden (config) so a
+            // login launch is silent. Show it on a normal launch; closing it just
+            // hides it (the app keeps running so the summon stays available).
+            if let Some(main) = app.get_webview_window("main") {
+                let hidden_launch = std::env::args().any(|a| a == "--hidden");
+                let m = main.clone();
+                main.on_window_event(move |e| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                        api.prevent_close();
+                        let _ = m.hide();
+                    }
+                });
+                if !hidden_launch {
+                    let _ = main.show();
+                    let _ = main.set_focus();
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -59,7 +168,79 @@ pub fn run() {
             commands::list_categories,
             commands::add_file_item,
             commands::file_to_temp,
+            commands::get_image_data_url,
+            commands::list_environments,
+            commands::set_environment,
+            commands::update_item,
+            commands::read_image_as_data_url,
+            commands::rename_category,
+            commands::delete_category,
+            commands::rename_environment,
+            commands::delete_environment,
+            commands::summon_paste,
+            commands::summon_hide,
+            commands::set_autostart,
+            commands::get_autostart,
+            commands::write_drag_icon,
+            commands::stage_text_file,
+            commands::stage_blob_file,
+            commands::start_multi_drag,
+            commands::set_clipboard_watch,
+            commands::show_tray,
+            commands::open_commit,
+            commands::hide_tray,
+            commands::tray_paste,
+            commands::accessibility_trusted,
+            commands::open_accessibility_settings,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            use tauri::Manager;
+            // Clicking the dock icon (with the main window hidden) re-opens it.
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(main) = app.get_webview_window("main") {
+                    let _ = main.show();
+                    let _ = main.set_focus();
+                }
+            }
+        });
+}
+
+/// Show/hide the floating tray (shelf) window.
+fn toggle_tray(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("tray") {
+        if win.is_visible().unwrap_or(false) {
+            // ask the webview to animate out; it hides the window when done
+            use tauri::Emitter;
+            let _ = win.emit("tray:close", ());
+        } else {
+            let _ = commands::show_tray(app.clone());
+        }
+    }
+}
+
+/// Show/hide the always-available quick-find panel window.
+fn toggle_summon(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(win) = app.get_webview_window("summon") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+        } else {
+            // Remember the app the user is in (safety net for the paste).
+            crate::summon::capture_frontmost();
+            // AppKit must be touched on the main thread: position on the cursor's
+            // screen, show as a key panel WITHOUT activating the app, then reset.
+            let w = win.clone();
+            let _ = app.run_on_main_thread(move || {
+                use tauri::{Emitter, Manager};
+                crate::summon::position_on_cursor_screen(&w);
+                let _ = w.show();
+                crate::summon::make_key(&w);
+                // global emit so the onboarding (main window) can react to the summon too
+                let _ = w.app_handle().emit("summon:open", ());
+            });
+        }
+    }
 }

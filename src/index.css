@@ -2,980 +2,244 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   quickboard — Soft Paper design system
+   Warm, light, premium. Pastel "wardrobe" tints on a calm canvas; ink-first
+   type; layered soft shadows; concentric rounding. Motion curves per
+   emil-design-eng. Light theme for v1 (dark, future, keeps the pastels).
+   ============================================================================ */
+
 :root {
-  /* ── Redesign tokens (Plan 3): dark sidebar + bright layered content ──
-     High contrast, real depth, tasteful color. See
-     docs/superpowers/specs/2026-06-21-quickboard-redesign.md */
+  /* surfaces */
+  --canvas: #e8e8ea;        /* window backdrop behind the two cards */
+  --board: #ffffff;         /* main card surface (white) */
+  --sidebar: #f4f4f6;       /* sidebar card (warm — keeps the white active pill popping) */
+  --elev: #ffffff;          /* elevated pills / popovers / cards-on-board */
 
-  /* surfaces — FINAL two-card light-sidebar shell (target-final.html) */
-  --canvas: #e7e7e5; /* thin neutral canvas behind the two cards */
-  --bg: #ffffff; /* content panel surface (cards pop on the in-panel bg) */
-  --panel-bg: #ffffff; /* main card (white) */
-  --card: #ffffff;
-  --side-bg: #f6f6f4; /* LIGHT sidebar card */
-  --side-elev: #ffffff; /* elevated white pill / surfaces inside the sidebar */
-  --side-border: #ebebe8; /* hairline around the light sidebar card */
+  /* ink scale (high contrast, warm-neutral) */
+  --ink: #0b0b0c;
+  --ink-soft: #18181b;
+  --text: #3f3f46;
+  --muted: #71717a;
+  --faint: #9b9ba1;
+  --fainter: #a1a1aa;
 
-  /* text — HIGH CONTRAST (the core fix) */
-  --ink: #0b0b0c; /* headings — near black */
-  --text: #3f3f46; /* body */
-  --muted: #71717a; /* secondary, use sparingly */
-  --faint: #a1a1aa;
-  /* Sidebar foreground/muted — now DARK text on the light sidebar card. */
-  --side-fg: #0b0b0c;
-  --side-muted: #74746f;
+  /* lines */
+  --border: #e5e5e9;
+  --hair: #ececf1;
+  --hair-soft: #eeeef2;
 
-  /* lines + depth */
-  --border: #e6e6e3;
-  --hair: #efefed;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 28px -12px rgba(0, 0, 0, 0.14);
-  --shadow-pop: 0 10px 34px rgba(0, 0, 0, 0.16);
-  /* Elevated white nav/active pill on the light sidebar. */
-  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px -6px rgba(0, 0, 0, 0.12);
+  /* layered soft shadows (shadows over hard borders) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-shell: 0 1px 2px rgba(0, 0, 0, 0.04), 0 14px 34px -18px rgba(0, 0, 0, 0.16);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 14px -8px rgba(0, 0, 0, 0.13);
+  --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 18px -8px rgba(0, 0, 0, 0.22);
+  --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.06), 0 24px 50px -20px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 1px 3px rgba(0, 0, 0, 0.08), 0 44px 84px -30px rgba(0, 0, 0, 0.55);
+  --shadow-ink: 0 6px 16px -8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.13);
 
-  /* accent + semantic + category palette */
-  --accent: #4f46e5; /* primary (active, primary buttons) */
-  --green: #16a34a;
-  --amber: #d97706;
-  --blue: #3b82f6;
-  --violet: #7c3aed;
-  --rose: #e11d48;
-  --cyan: #0891b2;
+  /* concentric radii (outer = inner + frame) */
+  --r-modal: 28px;
+  --r-sheet: 24px;
+  --r-card: 16px;
+  --r-inner: 20px;   /* media tile inside an 8px-framed modal */
+  --r-pill: 11px;
+  --r-tile: 10px;
+  --frame: 8px;      /* the system inset frame around nested media */
 
-  /* radii — iOS squircle scale (premium pass: deeper, concentric) */
-  --r-panel: 16px; /* the two shell cards (sidebar + main) */
-  --r-card: 18px; /* quick-access cards + grouped containers (squircle) */
-  --r-group: 16px; /* iOS grouped-inset container */
-  --r-row: 12px; /* a row inside a grouped container */
-  --r-tile: 12px;
-  --r-pill: 10px;
-
-  /* floating-panel depth */
-  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -14px rgba(0, 0, 0, 0.2);
-
-  /* ── Premium depth (shadows over borders) ──
-     Layered soft shadows give cards/groups real elevation without a flat 1px
-     border. A hairline ring (0 0 0 1px) seats the edge; the long, soft drop
-     gives the iOS "floating" feel. */
-  --shadow-depth: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.03),
-    0 16px 32px -16px rgba(0, 0, 0, 0.22);
-  --shadow-group: 0 0 0 1px rgba(0, 0, 0, 0.04),
-    0 10px 24px -16px rgba(0, 0, 0, 0.18);
-  --shadow-depth-hover: 0 0 0 1px rgba(0, 0, 0, 0.05),
-    0 4px 8px rgba(0, 0, 0, 0.04), 0 26px 48px -20px rgba(0, 0, 0, 0.3);
-  /* Inset ring for icon tiles (so the glyph sits in a soft well). */
-  --tile-inset: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
-
-  /* ── Legacy --qb-* aliases, remapped to the new HIGH-CONTRAST values ──
-     so existing components (Home / ItemRow / Settings / Dialog) inherit
-     readable contrast immediately, before their R2+ rebuild. */
-  --qb-bg: var(--bg); /* content canvas (was #ffffff) */
-  --qb-card: var(--card);
-  --qb-sidebar: var(--side-bg);
-  --qb-border: var(--border);
-  --qb-hair: var(--hair);
-  --qb-ink: var(--ink); /* near-black headings */
-  --qb-muted: var(--muted); /* readable secondary */
-  --qb-muted2: var(--faint);
-  --qb-amber: var(--amber);
-  --qb-green: var(--green);
-  --qb-blue: var(--blue);
-  --qb-purple: var(--violet);
-  --qb-accent: var(--accent);
-
-  /* Motion identity (see docs/.../2026-06-21-quickboard-motion.md) */
+  /* motion — emil curves */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-morph: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-quick: 140ms;
-  --dur-std: 220ms;
-  --dur-slow: 360ms;
+  --dur: 220ms;
+  --dur-slow: 320ms;
+
+  /* shadcn/Radix primitive tokens (kept so reused ui/* primitives compile),
+     mapped onto the Soft Paper neutrals. */
+  --background: 60 9% 96%;
+  --foreground: 240 6% 5%;
+  --card-bg: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 6% 5%;
+  --primary: 240 6% 5%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 48 12% 92%;
+  --secondary-foreground: 240 6% 10%;
+  --muted-hsl: 48 12% 92%;
+  --muted-foreground: 240 4% 46%;
+  --accent: 48 12% 92%;
+  --accent-foreground: 240 6% 10%;
+  --destructive: 0 60% 47%;
+  --destructive-foreground: 0 0% 100%;
+  --border-hsl: 48 9% 90%;
+  --input: 48 9% 90%;
+  --ring: 240 6% 5%;
+  --radius: 0.75rem;
 }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
+* {
+  border-color: var(--border);
 }
 
-/* Tabular numerals app-wide for any dynamic count / badge / slot-text value,
-   so digits don't jitter as they change. */
-.qb-num,
-.qb-count,
-kbd {
-  font-variant-numeric: tabular-nums;
+html, body, #root {
+  height: 100%;
 }
 
-/* --- Window dragging (titleBarStyle: Overlay) ---
-   The real fix combines THREE things:
-     1. window permissions in capabilities/default.json
-        (core:window:default + core:window:allow-start-dragging)
-     2. `data-tauri-drag-region` on the drag bands (canvas margins + the
-        sidebar brand band) — set in AppShell.tsx / Sidebar.tsx
-     3. the mousedown target itself must carry the attribute, so non-interactive
-        children inside a drag band get `pointer-events: none` (.qb-drag-passthrough)
-        and interactive controls keep `pointer-events: auto` and are NOT drag regions.
-   We also keep the CSS -webkit-app-region hints as a belt-and-suspenders for the
-   Overlay titlebar; both can coexist. */
-.qb-drag {
-  -webkit-app-region: drag;
-  app-region: drag;
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden; /* desktop app: the shell manages its own scroll regions */
 }
-.qb-no-drag {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
+
+::selection {
+  background: rgba(122, 104, 192, 0.22);
 }
-/* Non-interactive children inside a data-tauri-drag-region band: let the
-   mousedown fall through to the draggable parent so dragging always starts. */
-.qb-drag-passthrough {
+
+/* numerals that line up (counts, times, sizes) */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Tauri: drag the window from chrome; never from interactive controls. */
+[data-tauri-drag-region] { app-region: drag; -webkit-app-region: drag; }
+.qb-no-drag { app-region: no-drag; -webkit-app-region: no-drag; }
+
+/* Pressable feedback — scale(0.97) on active (emil). Reduced-motion safe. */
+.qb-press { transition: transform var(--dur-quick) var(--ease-out); }
+.qb-press:active { transform: scale(0.96); }
+
+/* Quiet scrollbars for the board / lists. */
+.qb-scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #d6d5cf transparent; }
+.qb-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.qb-scroll::-webkit-scrollbar-thumb { background: #d6d5cf; border-radius: 9999px; border: 3px solid transparent; background-clip: content-box; }
+.qb-scroll::-webkit-scrollbar-thumb:hover { background: #c4c3bb; background-clip: content-box; }
+.qb-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Hide the horizontal scrollbar on filter rows (still scrollable by trackpad). */
+.qb-noscrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.qb-noscrollbar::-webkit-scrollbar { display: none; }
+
+/* Card hover: shadow only — NO transform. A hovered element keeps a composited
+   layer in WebKit, and that layer's gradient goes black (stale) on window resize.
+   Lifting via shadow keeps the card on the normal paint path, so it always repaints. */
+.qb-card-hover { transition: box-shadow 0.28s cubic-bezier(0.23, 1, 0.32, 1); }
+.qb-card-hover:hover { box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.28), 0 3px 10px -4px rgba(0, 0, 0, 0.09); }
+
+/* Slow ambient drift for the live-preview gradients. */
+@keyframes qb-drift {
+  0%, 100% { transform: scale(1.25) translate(0, 0); }
+  50% { transform: scale(1.25) translate(-3%, -2%); }
+}
+.qb-drift { animation: qb-drift 14s ease-in-out infinite; }
+
+/* New-item mint: the freshly-added row slides into place with a tint highlight
+   that fades out. No fill-mode, so it reverts to the base (hover) state after. */
+@keyframes qb-mint-row {
+  0% { background-color: var(--mint-tint); transform: translateY(-9px); opacity: 0; }
+  16% { opacity: 1; }
+  100% { background-color: rgba(255, 255, 255, 0); transform: translateY(0); opacity: 1; }
+}
+.qb-mint-row { animation: qb-mint-row 1.15s cubic-bezier(0.23, 1, 0.32, 1); }
+
+/* Soft float for the empty-state / welcome glyph. */
+@keyframes qb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.qb-float { animation: qb-float 3.6s ease-in-out infinite; }
+
+/* Sheen sweep across a button on hover. */
+.qb-shine { position: relative; overflow: hidden; }
+.qb-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 32%, rgba(255, 255, 255, 0.22) 50%, transparent 68%);
+  transform: translateX(-130%);
+  transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
   pointer-events: none;
 }
+.qb-shine:hover::after { transform: translateX(130%); }
 
-/* --- Press feedback: scale-down on active for all pressables --- */
-.qb-press {
-  transition: transform var(--dur-quick) var(--ease-out);
-}
-.qb-press:active {
-  transform: scale(0.96);
-}
-
-/* --- Light sidebar nav / category hover (only on non-active rows) ---
-   Active rows paint an elevated WHITE pill (NavIndicator / inline bg); the
-   transparent non-active rows get a faint ink wash on hover. */
-.qb-side-nav,
-.qb-side-cat {
-  transition: background var(--dur-quick) var(--ease-out),
-    color var(--dur-quick) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-side-nav:hover {
-    background: rgba(11, 11, 12, 0.04);
-    color: var(--ink);
-  }
-  .qb-side-cat[aria-pressed="false"]:hover {
-    background: rgba(11, 11, 12, 0.04);
-    color: var(--ink);
-  }
-}
-
-/* --- Library card-row: hover elevation + action reveal --- */
-.qb-card-row {
-  transition:
-    border-color var(--dur-quick) var(--ease-out),
-    box-shadow var(--dur-std) var(--ease-out),
-    transform var(--dur-std) var(--ease-out);
-}
-.qb-row__actions {
-  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-row__actions {
-    opacity: 0.55;
-    transform: translateX(6px);
-  }
-  .qb-card-row:hover {
-    border-color: var(--faint);
-    box-shadow: var(--shadow-card);
-    transform: translateY(-1px);
-  }
-  .qb-card-row:hover .qb-row__actions {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* --- Quick-access card: depth (layered shadow, no flat border) + hover lift --- */
-.qb-quick-card {
-  box-shadow: var(--shadow-depth);
-  transition:
-    box-shadow var(--dur-std) var(--ease-out),
-    transform var(--dur-std) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-quick-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-depth-hover);
-  }
-}
-
-/* --- Icon tiles: soft inset well (premium pass) --- */
-.qb-tile {
-  box-shadow: var(--tile-inset);
-}
-
-/* --- Glassy copy button on quick cards (frosted, soft-inset) --- */
-.qb-glass-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  min-height: 36px;
-  padding: 0.5rem;
-  border: none;
-  border-radius: 11px;
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-  background: rgba(246, 246, 245, 0.85);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  cursor: pointer;
-  transition: background var(--dur-quick) var(--ease-out),
-    color var(--dur-quick) var(--ease-out),
-    transform var(--dur-quick) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-glass-btn:hover {
-    background: rgba(240, 240, 238, 0.95);
-    color: var(--ink);
-  }
-}
-.qb-glass-btn:active {
-  transform: scale(0.96);
-}
-
-/* --- iOS grouped-inset list (Library) --- */
-.qb-group {
-  background: #fafafa;
-  border-radius: var(--r-group);
-  padding: 5px;
-  box-shadow: var(--shadow-group);
-}
-/* Rows inside a group: hairline-divided (iOS Settings), no per-row border. */
-.qb-group-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.7rem 0.7rem;
-  border-radius: var(--r-row);
-  background: transparent;
-  transition: background var(--dur-quick) var(--ease-out);
-}
-/* Hairline divider between consecutive rows (drawn as a top inset line). */
-.qb-group-row + .qb-group-row::before {
-  content: "";
-  position: absolute;
-  left: 0.7rem;
-  right: 0.7rem;
-  top: 0;
-  height: 1px;
-  background: #f0f0ee;
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-group-row:hover {
-    background: #ffffff;
-  }
-  /* The hover surface should hide its own top divider AND the next row's. */
-  .qb-group-row:hover::before,
-  .qb-group-row:hover + .qb-group-row::before {
-    opacity: 0;
-  }
-}
-
-/* --- Confidential frost: dither overlay sits on a CSS-blurred preview --- */
-.qb-frost[data-revealed="false"] {
-  /* The blur is applied inline; this hook is for any future reveal animation. */
-}
-
-/* --- ⋯ menu floating on a dark file cover: recolor light for contrast --- */
-.qb-cover-menu .qb-menu-trigger {
-  color: rgba(255, 255, 255, 0.78);
-  opacity: 0.85;
-}
-.qb-cover-menu .qb-menu-trigger:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.14);
-}
-.qb-cover-menu .qb-menu-trigger[data-state="open"] {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-/* --- ⋯ menu trigger: rests dim on cards, brightens on card hover --- */
-.qb-menu-trigger {
-  transition: opacity 160ms var(--ease-out), color 140ms var(--ease-out),
-    background 140ms var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-quick-card .qb-menu-trigger {
-    opacity: 0.55;
-  }
-  .qb-quick-card:hover .qb-menu-trigger {
-    opacity: 1;
-  }
-}
-
-/* --- ⋯ DropdownMenu items (Radix) --- */
-.qb-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text);
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  outline: none;
-  letter-spacing: -0.01em;
-  transition: background 120ms var(--ease-out), color 120ms var(--ease-out);
-}
-.qb-menu-item[data-highlighted] {
-  background: var(--hair);
-  color: var(--ink);
-}
-.qb-menu-item[data-disabled] {
-  color: var(--faint);
-  cursor: not-allowed;
-}
-.qb-menu-item--danger {
-  color: var(--rose);
-}
-.qb-menu-item--danger[data-highlighted] {
-  background: rgba(225, 29, 72, 0.08);
-  color: var(--rose);
-}
-.qb-menu-item--confirm {
-  background: rgba(225, 29, 72, 0.08);
-}
-.qb-menu-soon {
-  margin-left: auto;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
-  background: var(--hair);
-  border-radius: 999px;
-  padding: 0.05rem 0.4rem;
-}
-
-/* --- Expandable category groups: tree connector + sub-rows (#33 style) ---
-   A thin vertical connector runs down the left of an expanded group; each
-   sub-row gets a short horizontal branch tick. The selected sub-row paints an
-   elevated white pill. */
-.qb-tree {
-  position: relative;
-  margin: 0.1rem 0 0.2rem;
-  padding-left: 1.55rem;
-}
-/* The vertical line. Stops short of the last tick for a tidy terminal. */
-.qb-tree::before {
-  content: "";
-  position: absolute;
-  left: 1.05rem;
-  top: 0;
-  bottom: 0.55rem;
-  width: 1.5px;
-  background: var(--hair);
-  border-radius: 1px;
-}
-.qb-subrow {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  min-height: 30px;
-  padding: 0.32rem 0.55rem;
-  border: none;
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: #5a5a56;
-  font-family: inherit;
-  font-size: 0.785rem;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-quick) var(--ease-out),
-    color var(--dur-quick) var(--ease-out);
-}
-/* Branch tick: a short horizontal line from the trunk to the row. */
-.qb-subrow::before {
-  content: "";
-  position: absolute;
-  left: -0.5rem;
-  top: 50%;
-  width: 0.5rem;
-  height: 1.5px;
-  background: var(--hair);
-  transform: translateY(-50%);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-subrow[aria-current="false"]:hover {
-    background: rgba(11, 11, 12, 0.04);
-    color: var(--ink);
-  }
-}
-.qb-subrow[aria-current="true"] {
-  color: var(--ink);
-  font-weight: 700;
-  background: var(--side-elev);
-  box-shadow: var(--shadow-pill);
-}
-
-/* Category group trigger: ≥40px hit area, chevron + count badge. */
-.qb-cat-trigger {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  width: 100%;
-  min-height: 34px;
-  padding: 0.4rem 0.55rem;
-  border: none;
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: #5a5a56;
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--dur-quick) var(--ease-out),
-    color var(--dur-quick) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-cat-trigger:hover {
-    background: rgba(11, 11, 12, 0.04);
-    color: var(--ink);
-  }
-}
-.qb-cat-trigger[data-active="true"] {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-/* Small rounded-square count badge (neutral by default; amber only where it
-   matters, e.g. a confidential count). */
-.qb-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.15rem;
-  height: 1.15rem;
-  padding: 0 0.32rem;
-  border-radius: 6px;
-  font-size: 0.66rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-  background: var(--hair);
-  color: #74746f;
-}
-.qb-badge--amber {
-  background: #fef0d9;
-  color: #b45309;
-}
-
-/* Chevron wrapper: ≥40px hit area via padding; rotates on expand. */
-.qb-chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: #b0b0ab;
-  transition: transform var(--dur-std) var(--ease-out),
-    color var(--dur-quick) var(--ease-out);
-}
-.qb-chevron[data-expanded="true"] {
-  transform: rotate(180deg);
-  color: #74746f;
-}
-
-/* Small icon buttons: guarantee a ≥40px hit target without enlarging the glyph,
-   using a centered pseudo-element. Apply to copy/⋯/chevron/switcher triggers. */
-.qb-hit {
-  position: relative;
-}
-.qb-hit::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  transform: translate(-50%, -50%);
-}
-
-/* Image / dither / cover outlines (light mode): a subtle pure-black low-opacity
-   outline so they don't float borderless on white. */
-.qb-img-outline {
-  outline: 1px solid rgba(0, 0, 0, 0.1);
-  outline-offset: -1px;
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   PINBOARD (R-pinboard) — greeting + ⌘K search + type tabs + masonry of
-   sticky NoteCards. Warm board, ink chrome.
-   ────────────────────────────────────────────────────────────────────────── */
-
-.qb-board-page {
-  padding: 22px 24px 40px;
-  max-width: 1040px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-}
-
-/* Header */
-.qb-board-head {
-  display: flex;
-  flex-direction: column;
-}
-.qb-board-greeting {
-  font-size: 1.3125rem;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  color: var(--ink);
-  margin: 0;
-  line-height: 1.1;
-}
-
-/* Centered ⌘K search bar — recessed field with an inset hairline ring. */
-.qb-board-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #f6f6f5;
-  border-radius: 13px;
-  padding: 11px 15px;
-  margin: 14px 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
-  color: #9a9a9e;
-}
-.qb-board-search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 0.84375rem;
-  color: var(--ink);
-  letter-spacing: -0.005em;
-}
-.qb-board-search input::placeholder {
-  color: #9a9a9e;
-}
-.qb-board-kbd {
-  margin-left: auto;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  background: #fff;
-  border-radius: 6px;
-  padding: 2px 7px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
-  color: #76767a;
-  flex-shrink: 0;
-}
-
-/* Type tabs */
-.qb-board-tabs {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 14px;
-}
-.qb-board-tab {
-  font-size: 0.78rem;
-  padding: 7px 13px;
-  border-radius: 9px;
-  border: none;
-  background: transparent;
-  color: #56565a;
-  font-family: inherit;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: color var(--dur-quick) var(--ease-out),
-    background var(--dur-quick) var(--ease-out);
-}
-.qb-board-tab[aria-pressed="true"] {
-  background: var(--ink);
-  color: #fff;
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-board-tab[aria-pressed="false"]:hover {
-    color: var(--ink);
-    background: rgba(11, 11, 12, 0.04);
-  }
-}
-
-/* --- The board: CSS columns masonry --- */
-.qb-board {
-  columns: 3;
-  column-gap: 16px;
-  padding: 14px 4px 8px;
-  margin: -8px -4px 0;
-}
-@media (max-width: 900px) {
-  .qb-board {
-    columns: 2;
-  }
-}
-@media (max-width: 600px) {
-  .qb-board {
-    columns: 1;
-  }
-}
-
-/* --- A sticky note. The OUTER .qb-note is a STATIC multicol item — it never
-   transforms, because transforming a column item re-packs the whole column and
-   creates a hover flicker loop. All lift/rotation/shadow live on the INNER. --- */
-.qb-note {
-  break-inside: avoid;
-  -webkit-column-break-inside: avoid;
-  page-break-inside: avoid;
-  margin-bottom: 18px;
-}
-.qb-note__inner {
-  position: relative;
-  border-radius: 13px;
-  padding: 15px 15px 12px;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04),
-    0 10px 22px -12px rgba(0, 0, 0, 0.28);
-  transition: transform var(--dur-std) var(--ease-out),
-    box-shadow var(--dur-std) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-note:hover .qb-note__inner {
-    transform: rotate(0deg) translateY(-3px) !important;
-    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.05),
-      0 22px 40px -16px rgba(0, 0, 0, 0.34);
-  }
-}
-
-/* Pushpin — colored gradient from the note's --catColor; amber variant. */
-.qb-pin {
-  position: absolute;
-  top: -9px;
-  left: 18px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 34% 30%,
-    color-mix(in srgb, var(--catColor) 55%, #ffffff),
-    var(--catColor) 72%
-  );
-  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.3),
-    inset 0 -2px 3px rgba(0, 0, 0, 0.25);
-}
-.qb-pin::after {
-  content: "";
-  position: absolute;
-  top: 11px;
-  left: 6px;
-  width: 3px;
-  height: 8px;
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 2px;
-  transform: rotate(8deg);
-}
-.qb-pin--amber {
-  background: radial-gradient(circle at 34% 30%, #ffd27a, #e0a01f 70%);
-}
-
-/* Note head — clean icon tile + favorite star */
-.qb-note__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 9px;
-}
-.qb-note__seal {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink);
-  flex-shrink: 0;
-}
-.qb-note__star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  padding: 2px;
-  margin: -2px -2px 0 0;
-  color: #c4c4c6;
-  cursor: pointer;
-  border-radius: 7px;
-  transition: color var(--dur-quick) var(--ease-out),
-    transform var(--dur-quick) var(--ease-out);
-}
-.qb-note__star:active {
-  transform: scale(0.9);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-note__star[data-on="false"]:hover {
-    color: #f5b301;
-  }
-}
-
-.qb-note__title {
-  font-size: 0.875rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  word-break: break-word;
-}
-
-/* Mono value line (masked text / revealed value) */
-.qb-note__mono {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
-  color: #3a3a3e;
-  word-break: break-all;
-}
-
-/* File meta line + drag affordance */
-.qb-note__file {
-  font-size: 0.75rem;
-  color: #5a5a5e;
-  margin-top: 4px;
-  line-height: 1.45;
-  display: inline-flex;
-  font-weight: 600;
-}
-
-/* Confidential in-note reveal button */
-.qb-note__eye {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 7px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 0.65625rem;
-  font-weight: 600;
-  color: #b45309;
-  cursor: pointer;
-  letter-spacing: -0.005em;
-  transition: opacity var(--dur-quick) var(--ease-out);
-}
-.qb-note__eye:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* Footer */
-.qb-note__foot {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 11px;
-  font-size: 0.65625rem;
-  color: #9a9a9e;
-  font-weight: 600;
-}
-.qb-note__chip {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-  padding: 2px 7px;
-  color: #56565a;
-  max-width: 60%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.qb-note__time {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-/* ⋯ menu pinned bottom-right of the note; rests dim, brightens on hover. */
-.qb-note__menu {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-}
-.qb-note__menu .qb-menu-trigger {
-  transition: opacity 160ms var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .qb-note__menu .qb-menu-trigger {
-    opacity: 0;
-  }
-  .qb-note:hover .qb-note__menu .qb-menu-trigger {
-    opacity: 0.6;
-  }
-  .qb-note__menu .qb-menu-trigger:hover,
-  .qb-note__menu .qb-menu-trigger[data-state="open"] {
-    opacity: 1;
-  }
-}
-
-/* Board meta footer */
-.qb-board-foot {
-  margin-top: auto;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--hair);
-  font-size: 0.78rem;
-  color: var(--faint);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* --- Add-success one-shot highlight (tint -> transparent) --- */
-@keyframes qb-add-flash {
-  from {
-    background: rgba(58, 157, 78, 0.16);
-  }
-  to {
-    background: transparent;
-  }
-}
-.qb-add-flash {
-  animation: qb-add-flash 600ms var(--ease-out);
-}
-
-/* --- Reduced motion: keep opacity/color, kill transform/position motion --- */
 @media (prefers-reduced-motion: reduce) {
-  .qb-press {
-    transition: none;
-  }
-  .qb-press:active {
-    transform: none;
-  }
-  .qb-row__actions {
-    transition: opacity 160ms var(--ease-out);
-    transform: none !important;
-  }
-  .qb-card-row,
-  .qb-quick-card {
-    transition: box-shadow var(--dur-quick) var(--ease-out);
-  }
-  .qb-glass-btn {
-    transition: background var(--dur-quick) var(--ease-out),
-      color var(--dur-quick) var(--ease-out);
-  }
-  .qb-glass-btn:active {
-    transform: none;
-  }
-  .qb-frost {
-    transition: none !important;
-  }
-  /* Sticky notes: keep the shadow shift, kill all transform/lift/rotation. */
-  .qb-note__inner {
-    transition: box-shadow var(--dur-std) var(--ease-out);
-    transform: none !important;
-  }
-  .qb-note__star:active {
-    transform: none;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .qb-card-row:hover .qb-row__actions {
-      transform: none;
-    }
-    .qb-card-row:hover,
-    .qb-quick-card:hover {
-      transform: none;
-    }
-    .qb-note:hover .qb-note__inner {
-      transform: none !important;
-    }
-  }
-  .qb-add-flash {
-    animation: none;
+  .qb-drift, .qb-float { animation: none; }
+  .qb-shine::after { display: none; }
+}
+
+/* CSS columns masonry for the board. */
+.qb-masonry { column-gap: 15px; }
+.qb-masonry > * { break-inside: avoid; margin-bottom: 15px; }
+
+/* Compact density preference (Settings → Appearance). */
+[data-density="compact"] .qb-masonry { column-gap: 11px; }
+[data-density="compact"] .qb-masonry > * { margin-bottom: 11px; }
+[data-density="compact"] [data-folder-card] { min-height: 128px; }
+[data-density="compact"] [data-row] { padding-top: 4px; padding-bottom: 4px; }
+
+/* Form inputs (new-item sheet). */
+.qb-input {
+  width: 100%;
+  height: 42px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: #fafafc;
+  padding: 0 13px;
+  font-size: 13.5px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+.qb-input::placeholder { color: var(--fainter); }
+.qb-input:focus { border-color: #cfcec6; box-shadow: 0 0 0 3px rgba(11, 11, 12, 0.05); }
+textarea.qb-input { height: auto; padding-top: 10px; padding-bottom: 10px; line-height: 1.5; }
+
+/* Faint dither — just enough to break 8-bit banding on the smooth gradients (and a
+   light tooth over photo covers). The color flow itself is shader-smooth now. */
+.qb-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='130' height='130'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 116px 116px;
+  mix-blend-mode: overlay;
+  opacity: 0.07;
+}
+
+/* ----------------------------------------------------------------------------
+   Tint classes — an item "dressed" in a tint exposes a coherent token set.
+   Consumed via Tailwind arbitrary values, e.g. bg-[var(--t-card)].
+   ---------------------------------------------------------------------------- */
+.tint-sand     { --t-card:#f3eee2; --t-tile:#e8ddc4; --t-tile-ink:#8a7340; --t-pin:#b89b54; }
+.tint-amber    { --t-card:#f7efda; --t-tile:#ece0bd; --t-tile-ink:#8f7320; --t-pin:#c6a23f; }
+.tint-clay     { --t-card:#f4e8df; --t-tile:#ead7cb; --t-tile-ink:#95684c; --t-pin:#b07e5e; }
+.tint-rose     { --t-card:#f6eaee; --t-tile:#efdce0; --t-tile-ink:#a35e6c; --t-pin:#b86a78; }
+.tint-lilac    { --t-card:#efeaf6; --t-tile:#e4ddf2; --t-tile-ink:#6b5ca8; --t-pin:#8674c4; }
+.tint-violet   { --t-card:#ece7f6; --t-tile:#ddd4ef; --t-tile-ink:#5f4fa0; --t-pin:#7a68c0; }
+.tint-slate    { --t-card:#e8edf3; --t-tile:#d8dfe8; --t-tile-ink:#4f5b6b; --t-pin:#5b6678; }
+.tint-sky      { --t-card:#e4eef5; --t-tile:#d3e3ee; --t-tile-ink:#3c6783; --t-pin:#5b88a6; }
+.tint-mint     { --t-card:#e6f2ea; --t-tile:#d2e7d9; --t-tile-ink:#437a58; --t-pin:#5a9b6f; }
+.tint-sage     { --t-card:#ecf0e6; --t-tile:#dde6cf; --t-tile-ink:#5f7344; --t-pin:#7e9456; }
+.tint-stone    { --t-card:#edecea; --t-tile:#dededa; --t-tile-ink:#6b6b73; --t-pin:#8d8c84; }
+.tint-graphite { --t-card:#e4e4e2; --t-tile:#d3d3cf; --t-tile-ink:#4a4a47; --t-pin:#6b6b73; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qb-press { transition: none; }
+  .qb-press:active { transform: none; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-@layer base {
-  /* ── shadcn/ui theme, remapped INK-FIRST ──
-     HSL channel-only values (no hsl() wrapper) consumed by Tailwind tokens as
-     `hsl(var(--token))`. Tuned to the quickboard ink palette:
-       ink #0b0b0c, white, neutral grays, subtle borders, generous radius.
-     --card / --popover are deliberately re-declared here (overriding the hex
-     --card above) so shadcn surfaces resolve through `hsl(var(--card))`. */
-  :root {
-    --background: 0 0% 100%;            /* #ffffff */
-    --foreground: 240 6% 4%;           /* ink #0b0b0c */
-    --card: 0 0% 100%;                 /* #ffffff */
-    --card-foreground: 240 6% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 6% 4%;
-    --primary: 240 6% 4%;              /* ink #0b0b0c */
-    --primary-foreground: 0 0% 100%;   /* white */
-    --secondary: 60 6% 96%;            /* hair-ish #f3f3f2 */
-    --secondary-foreground: 240 6% 4%;
-    --muted: 60 6% 96%;
-    --muted-foreground: 240 4% 46%;    /* #71717a */
-    --accent: 60 6% 96%;
-    --accent-foreground: 240 6% 4%;
-    --destructive: 347 77% 53%;        /* rose #e11d48 */
-    --destructive-foreground: 0 0% 100%;
-    --border: 60 4% 90%;               /* #e6e6e4 */
-    --input: 60 4% 90%;
-    --ring: 240 6% 4%;                 /* ink focus ring */
-    --radius: 0.75rem;                 /* ~12px, soft */
-  }
-
-  .dark {
-    --background: 240 4% 9%;
-    --foreground: 0 0% 98%;
-    --card: 240 4% 11%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 4% 11%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 6% 4%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 347 77% 53%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 16%;
-    --input: 240 4% 16%;
-    --ring: 240 5% 84%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  html,
-  body {
-    /* Crisper text rendering on macOS (lighter, more even stems). */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui;
-    color: var(--qb-ink);
-    /* The thin neutral canvas shows through the two-card shell's gaps/margins. */
-    background: var(--canvas);
-    /* Tasteful body wrapping (avoids orphans / ragged lines). */
-    text-wrap: pretty;
-  }
-  /* Balance multi-word headings so line lengths even out. */
-  h1,
-  h2,
-  h3 {
-    text-wrap: balance;
-  }
-  /* Subtitles / paragraph bodies prefer pretty wrapping. */
-  p {
-    text-wrap: pretty;
-  }
+/* Manual "Reduce motion" preference (Settings) — mirrors the media query above. */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
 }

@@ -1,416 +1,255 @@
-import { useMemo } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
-import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import {
-  ChevronsUpDown,
-  LayoutGrid,
-  Lock,
-  Plus,
-  Settings,
-  Star,
-} from "lucide-react";
+import { useMemo, useState } from "react";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
+import { SlotText } from "slot-text/react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Box, ChevronDown, ChevronsUpDown, House, LayoutGrid, MoreHorizontal, Plus, Settings as SettingsIcon, Star, Zap } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { categoryColor } from "../lib/category-color";
-import type { Item } from "../lib/types";
-import { GenerativeAvatar } from "./Generative";
-import { Button } from "./ui/button";
-
-const EASE_OUT = [0.23, 1, 0.32, 1] as const;
-
-const navItemBase: React.CSSProperties = {
-  position: "relative",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.7rem",
-  padding: "0.55rem 0.7rem",
-  borderRadius: "var(--r-pill)",
-  fontSize: "0.84rem",
-  fontWeight: 500,
-  color: "var(--side-muted)",
-  textDecoration: "none",
-  cursor: "pointer",
-  letterSpacing: "-0.005em",
-  background: "transparent",
-  border: "none",
-  width: "100%",
-  textAlign: "left",
-  fontFamily: "inherit",
-};
-
-const navItemActive: React.CSSProperties = {
-  ...navItemBase,
-  color: "var(--ink)",
-  fontWeight: 700,
-};
-
-/**
- * Sliding active-nav indicator: an elevated WHITE pill with a soft shadow.
- * Rendered only inside the active nav link; the shared `layoutId` morphs its
- * position as the active item changes. Reduced motion -> snap (layout off).
- */
-function NavIndicator({ reduce }: { reduce: boolean }) {
-  return (
-    <motion.div
-      layoutId={reduce ? undefined : "nav-indicator"}
-      layout={!reduce}
-      transition={{ duration: 0.22, ease: EASE_OUT }}
-      style={{
-        position: "absolute",
-        inset: 0,
-        background: "var(--side-elev)",
-        borderRadius: "var(--r-pill)",
-        boxShadow: "var(--shadow-pill)",
-        zIndex: 0,
-      }}
-    />
-  );
-}
-
-/** Nav link contents sit above the sliding indicator. */
-function NavContent({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        position: "relative",
-        zIndex: 1,
-        display: "flex",
-        alignItems: "center",
-        gap: "0.7rem",
-        width: "100%",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** Ink rounded-square logo mark with a 2×2 grid glyph. */
-function LogoMark() {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        width: "26px",
-        height: "26px",
-        borderRadius: "8px",
-        background: "#0b0b0c",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
-    >
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" strokeWidth="2.2">
-        <rect x="3" y="3" width="7" height="7" rx="1.5" />
-        <rect x="14" y="3" width="7" height="7" rx="1.5" />
-        <rect x="3" y="14" width="7" height="7" rx="1.5" />
-        <rect x="14" y="14" width="7" height="7" rx="1.5" />
-      </svg>
-    </span>
-  );
-}
+import { useAppearance } from "../lib/appearance";
+import { useProfile } from "../lib/profile";
+import { ICONS } from "../lib/icons";
+import { TINTS } from "../lib/tints";
+import { Avatar } from "./Avatar";
+import { NewEnvironmentModal } from "./NewEnvironmentModal";
+import { ProfileEditor } from "./ProfileEditor";
+import { cn } from "../lib/utils";
 
 export function Sidebar() {
   const {
-    items,
-    categories,
-    setAddOpen,
-    categoryFilter,
-    setCategoryFilter,
-    pinnedOnly,
-    setPinnedOnly,
+    items, environments, activeEnvironment, categoryFilter, pinnedOnly,
+    setActiveEnvironment, setCategoryFilter, setPinnedOnly, setTypeFilter, setAddOpen, setPaletteOpen,
   } = useItems();
-  const reduce = !!useReducedMotion();
-
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onHome = pathname === "/";
-  const settingsActive = pathname.startsWith("/settings");
+  const [envOpen, setEnvOpen] = useState(true);
+  const [envModalOpen, setEnvModalOpen] = useState(false);
+  const [editEnv, setEditEnv] = useState<string | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profile = useProfile();
 
-  // Filter-driven active states (Home / Pinned / a category are all route "/").
-  const homeActive = onHome && categoryFilter === null && !pinnedOnly;
-  const pinnedActive = onHome && pinnedOnly;
+  // magnetic pull on the primary CTA
+  const reduce = useReducedMotion();
+  const newMagX = useMotionValue(0);
+  const newMagY = useMotionValue(0);
+  const newX = useSpring(newMagX, { stiffness: 300, damping: 18 });
+  const newY = useSpring(newMagY, { stiffness: 300, damping: 18 });
+  function onNewMove(e: React.MouseEvent) {
+    if (reduce) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    newMagX.set((e.clientX - (r.left + r.width / 2)) * 0.2);
+    newMagY.set((e.clientY - (r.top + r.height / 2)) * 0.32);
+  }
+  function onNewLeave() {
+    newMagX.set(0);
+    newMagY.set(0);
+  }
 
-  const pinnedCount = useMemo(() => items.filter((i) => i.pinned).length, [items]);
-
-  // Per-category counts (+ confidential count for the amber badge).
-  const counts = useMemo(() => {
-    const map = new Map<string, { total: number; confidential: number }>();
-    for (const item of items as Item[]) {
-      const c = map.get(item.category) ?? { total: 0, confidential: 0 };
-      c.total += 1;
-      if (item.confidential) c.confidential += 1;
-      map.set(item.category, c);
-    }
-    return map;
+  const favCount = useMemo(() => items.filter((i) => i.pinned).length, [items]);
+  const countByEnv = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of items) m.set(it.environment, (m.get(it.environment) ?? 0) + 1);
+    return m;
   }, [items]);
 
-  function pickHome() {
-    setCategoryFilter(null);
+  function goHome() {
     setPinnedOnly(false);
-  }
-  function pickPinned() {
     setCategoryFilter(null);
+    setTypeFilter(null);
+    if (!onHome) navigate({ to: "/" });
+  }
+  function goFavorites() {
     setPinnedOnly(true);
+    setCategoryFilter(null);
+    setTypeFilter(null);
+    if (!onHome) navigate({ to: "/" });
   }
-  function pickCategory(name: string) {
-    setCategoryFilter(categoryFilter === name ? null : name);
+  function goEnv(env: string | null) {
+    setActiveEnvironment(env);
     setPinnedOnly(false);
+    setTypeFilter(null);
+    if (!onHome) navigate({ to: "/" });
   }
+
+  const homeActive = onHome && !pinnedOnly && !categoryFilter;
+  const favActive = onHome && pinnedOnly;
 
   return (
-    <aside
-      style={{
-        width: "244px",
-        minWidth: "244px",
-        flex: "none",
-        background: "var(--side-bg)",
-        border: "1px solid var(--side-border)",
-        borderRadius: "var(--r-panel)",
-        display: "flex",
-        flexDirection: "column",
-        padding: "2.6rem 0.75rem 0.75rem",
-        height: "100%",
-        boxSizing: "border-box",
-        color: "var(--side-fg)",
-      }}
-    >
-      {/* Brand — generous window-drag band. */}
-      <div
-        data-tauri-drag-region
-        className="qb-drag"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.625rem",
-          padding: "0.55rem 0.4rem 1rem",
-        }}
-      >
-        <span className="qb-drag-passthrough" style={{ display: "inline-flex" }}>
-          <LogoMark />
-        </span>
-        <span
-          className="qb-drag-passthrough"
-          style={{
-            fontWeight: 800,
-            fontSize: "1rem",
-            color: "var(--ink)",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          quickboard
-        </span>
+    <aside className="flex w-[226px] shrink-0 flex-col overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--sidebar)] shadow-[var(--shadow-shell)]">
+      <div data-tauri-drag-region className="h-8 shrink-0" />
+
+      <div data-tauri-drag-region className="flex items-center gap-2.5 px-4 pb-3">
+        <img src="/quickboard-logo.svg" alt="quickboard" draggable={false} className="h-[28px] w-[28px] rounded-[9px] shadow-ink" />
+        <span className="text-[14px] font-extrabold tracking-[-0.025em] text-[var(--ink)]">quickboard</span>
       </div>
 
-      {/* Post note — ink button, white text. */}
-      <Button
-        type="button"
-        onClick={() => setAddOpen(true)}
-        className="qb-press qb-no-drag mb-3 h-auto justify-start gap-2 rounded-[11px] bg-[#0b0b0c] px-3 py-2.5 text-[0.84rem] font-bold tracking-tight text-white shadow-[0_2px_6px_rgba(0,0,0,.18)] hover:bg-[#0b0b0c]/90"
-      >
-        <Plus size={15} />
-        Post note
-        <kbd className="ml-auto text-[0.6875rem] font-normal text-white/50">⌘N</kbd>
-      </Button>
-
-      {/* Nav — sliding white pill shared across Home / Pinned / Settings. */}
-      <LayoutGroup id="sidebar-nav">
-        <nav
-          className="qb-no-drag"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.125rem",
-            marginBottom: "0.4rem",
-          }}
+      <div className="px-3">
+        <motion.button
+          type="button"
+          onClick={() => setAddOpen(true)}
+          onMouseMove={onNewMove}
+          onMouseLeave={onNewLeave}
+          whileTap={{ scale: 0.96 }}
+          style={{ x: newX, y: newY }}
+          className="qb-no-drag qb-shine flex h-[36px] w-full items-center gap-2.5 rounded-[11px] bg-[var(--ink)] px-3 text-[13px] font-semibold tracking-[-0.01em] text-white shadow-ink"
         >
-          <Link
-            to="/"
-            className="qb-press qb-side-nav"
-            style={homeActive ? navItemActive : navItemBase}
-            activeOptions={{ exact: true }}
-            onClick={pickHome}
-          >
-            {homeActive && <NavIndicator reduce={reduce} />}
-            <NavContent>
-              <LayoutGrid size={16} />
-              Home
-            </NavContent>
-          </Link>
-
-          <Link
-            to="/"
-            className="qb-press qb-side-nav"
-            style={pinnedActive ? navItemActive : navItemBase}
-            activeOptions={{ exact: true }}
-            onClick={pickPinned}
-          >
-            {pinnedActive && <NavIndicator reduce={reduce} />}
-            <NavContent>
-              <Star size={16} />
-              Pinned
-              {pinnedCount > 0 && (
-                <span className="qb-badge" style={{ marginLeft: "auto" }}>
-                  {pinnedCount}
-                </span>
-              )}
-            </NavContent>
-          </Link>
-
-          <Link
-            to="/settings"
-            className="qb-press qb-side-nav"
-            style={settingsActive ? navItemActive : navItemBase}
-          >
-            {settingsActive && <NavIndicator reduce={reduce} />}
-            <NavContent>
-              <Settings size={16} />
-              Settings
-            </NavContent>
-          </Link>
-        </nav>
-      </LayoutGroup>
-
-      {/* CATEGORIES — colored filter rows (click filters the board). */}
-      <SectionLabel>Categories</SectionLabel>
-      <div
-        className="qb-no-drag"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.0625rem",
-          overflowY: "auto",
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {categories.length === 0 ? (
-          <div style={{ fontSize: "0.75rem", color: "var(--faint)", padding: "0.35rem 0.7rem" }}>
-            No categories yet
-          </div>
-        ) : (
-          categories.map((name) => {
-            const c = counts.get(name) ?? { total: 0, confidential: 0 };
-            const active = onHome && categoryFilter === name && !pinnedOnly;
-            return (
-              <button
-                key={name}
-                type="button"
-                className="qb-press"
-                onClick={() => pickCategory(name)}
-                style={{
-                  ...navItemBase,
-                  gap: "0.6rem",
-                  color: active ? "var(--ink)" : "var(--side-muted)",
-                  fontWeight: active ? 700 : 500,
-                  background: active ? "var(--side-elev)" : "transparent",
-                  boxShadow: active ? "var(--shadow-pill)" : "none",
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: categoryColor(name),
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {name}
-                </span>
-                {c.confidential > 0 && (
-                  <span className="qb-badge qb-badge--amber" title={`${c.confidential} confidential`}>
-                    {c.confidential}
-                  </span>
-                )}
-                <span className="qb-badge">{c.total}</span>
-              </button>
-            );
-          })
-        )}
+          <Plus size={16} strokeWidth={2.1} />
+          New item
+          <span className="ml-auto rounded-[5px] bg-white/10 px-1.5 py-0.5 text-[10px] font-medium opacity-80">⌘N</span>
+        </motion.button>
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="qb-press mt-1 flex h-[33px] w-full items-center gap-2.5 rounded-[10px] px-3 text-[12.5px] font-medium text-[#54545c] hover:bg-black/[0.04]"
+        >
+          <Zap size={16} strokeWidth={1.8} className="text-[#84848c]" />
+          Quick find
+          <span className="ml-auto rounded-[5px] bg-[#e9e9ee] px-1.5 py-0.5 text-[10px] text-[var(--faint)]">⌘K</span>
+        </button>
       </div>
 
-      {/* Footer */}
-      <div className="qb-no-drag" style={{ marginTop: "0.5rem" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            padding: "0.25rem 0.6rem 0.55rem",
-            fontSize: "0.71rem",
-            color: "#8a8a8e",
-          }}
+      <nav className="qb-scroll flex flex-1 flex-col gap-1.5 px-3 pt-3">
+        <NavRow icon={<House size={16} strokeWidth={1.85} />} active={homeActive} onClick={goHome}>Home</NavRow>
+        <NavRow icon={<Star size={16} strokeWidth={1.85} />} active={favActive} onClick={goFavorites} badge={favCount > 0 ? favCount : undefined}>
+          Favorites
+        </NavRow>
+        <Link
+          to="/settings"
+          className={cn(
+            "qb-press relative flex h-[32px] items-center gap-2.5 rounded-[9px] px-2.5 text-[12.5px]",
+            pathname === "/settings" ? "font-semibold text-[var(--ink)]" : "font-medium text-[#54545c] hover:bg-black/[0.04]",
+          )}
         >
-          <Lock size={13} color="var(--green)" />
-          Local · encrypted
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.6rem",
-            padding: "0.45rem 0.55rem",
-            background: "#ffffff",
-            borderRadius: "11px",
-            boxShadow: "0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04)",
-          }}
-        >
-          <GenerativeAvatar seed="quickboard-local-you" size={30} radius={8} />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--ink)", lineHeight: 1.3 }}>
-              you
-            </div>
-            <div style={{ fontSize: "0.6875rem", color: "var(--faint)", lineHeight: 1.2 }}>
-              Local on this Mac
-            </div>
-          </div>
+          {pathname === "/settings" && (
+            <motion.span layoutId="sb-nav" className="absolute inset-0 rounded-[9px] bg-[#e8e8ec]" transition={{ type: "spring", stiffness: 420, damping: 34 }} />
+          )}
+          <SettingsIcon size={16} strokeWidth={1.85} className={cn("relative", pathname === "/settings" ? "text-[var(--ink)]" : "text-[#84848c]")} />
+          <span className="relative">Settings</span>
+        </Link>
+
+        <div className="mt-5 flex items-center gap-1 px-2.5 pb-1.5">
           <button
             type="button"
-            aria-label="Switch account"
-            className="qb-press qb-hit"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              cursor: "pointer",
-              color: "#b0b0b2",
-            }}
+            onClick={() => setEnvOpen((v) => !v)}
+            className="qb-press flex flex-1 items-center gap-1 text-[10.5px] font-bold uppercase tracking-[0.07em] text-[var(--fainter)]"
           >
-            <ChevronsUpDown size={15} />
+            Environments
+            <ChevronDown size={13} className={cn("transition-transform duration-200", envOpen ? "" : "-rotate-90")} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setEnvModalOpen(true)}
+            aria-label="New environment"
+            className="qb-press grid h-[19px] w-[19px] place-items-center rounded-[6px] text-[var(--fainter)] hover:bg-black/[0.06] hover:text-[var(--ink)]"
+          >
+            <Plus size={13} strokeWidth={2.3} />
           </button>
         </div>
+        <AnimatePresence initial={false}>
+          {envOpen && (
+            <motion.div
+              key="envlist"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+              className="flex flex-col gap-1.5 overflow-hidden"
+            >
+              <NavRow icon={<LayoutGrid size={16} strokeWidth={1.85} />} active={onHome && activeEnvironment === null} onClick={() => goEnv(null)} badge={items.length || undefined} small pillId="sb-env">
+                All environments
+              </NavRow>
+              {environments.map((env) => (
+                <EnvRow
+                  key={env}
+                  env={env}
+                  active={onHome && activeEnvironment === env}
+                  onClick={() => goEnv(env)}
+                  onEdit={() => setEditEnv(env)}
+                  badge={countByEnv.get(env) || undefined}
+                />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
+
+      <div className="px-3 pb-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setProfileOpen(true)}
+          className="qb-press flex w-full items-center gap-2.5 rounded-[13px] border border-[var(--border)] bg-white px-2.5 py-2 text-left shadow-sm hover:bg-[#fafafc]"
+        >
+          <Avatar name={profile.name || "you"} tint={profile.tint} photo={profile.photo} className="h-[31px] w-[31px] rounded-[9px] text-[13px] ring-1 ring-black/5" />
+          <div className="min-w-0">
+            <div className="truncate text-[12.5px] font-semibold leading-tight text-[var(--ink)]">{profile.name === "you" ? "you" : profile.name}</div>
+            <div className="truncate text-[10.5px] text-[var(--faint)]">{profile.status || "Local on this Mac"}</div>
+          </div>
+          <ChevronsUpDown size={16} className="ml-auto text-[#b9b9c1]" />
+        </button>
       </div>
+
+      <NewEnvironmentModal open={envModalOpen || editEnv !== null} edit={editEnv} onClose={() => { setEnvModalOpen(false); setEditEnv(null); }} />
+      <ProfileEditor open={profileOpen} onClose={() => setProfileOpen(false)} />
     </aside>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function NavRow({
+  icon, active, onClick, badge, pillId = "sb-nav", children,
+}: {
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  badge?: number;
+  small?: boolean;
+  pillId?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div
-      style={{
-        fontSize: "0.655rem",
-        fontWeight: 700,
-        letterSpacing: "0.08em",
-        color: "#a2a29c",
-        textTransform: "uppercase",
-        padding: "0.5rem 0.7rem 0.4rem",
-      }}
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "qb-press relative flex h-[32px] w-full items-center gap-2.5 rounded-[9px] px-2.5 text-[12.5px]",
+        active ? "font-semibold text-[var(--ink)]" : "font-medium text-[#54545c] hover:bg-black/[0.04]",
+      )}
     >
-      {children}
+      {active && (
+        <motion.span
+          layoutId={pillId}
+          className="absolute inset-0 rounded-[9px] bg-[#e8e8ec]"
+          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+        />
+      )}
+      <span className={cn("relative", active ? "text-[var(--ink)]" : "text-[#84848c]")}>{icon}</span>
+      <span className="relative truncate">{children}</span>
+      {badge != null && (
+        <span className="relative ml-auto inline-flex h-[20px] min-w-[22px] items-center justify-center rounded-[7px] bg-[#e9e9ee] px-[6px] text-[11px] font-medium text-[#82828a] tabular">
+          <SlotText text={String(badge)} />
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** An environment row — uses the environment's chosen icon + color (from the appearance
+ * store under `env:${name}`), falling back to a neutral box. */
+function EnvRow({ env, active, badge, onClick, onEdit }: { env: string; active: boolean; badge?: number; onClick: () => void; onEdit: () => void }) {
+  const app = useAppearance(`env:${env}`);
+  const Icon = app.icon ? ICONS[app.icon] : Box;
+  const color = app.tint ? TINTS[app.tint].tileInk : undefined;
+  return (
+    <div className="group/env relative">
+      <NavRow icon={<Icon size={16} strokeWidth={1.85} style={color ? { color } : undefined} />} active={active} onClick={onClick} badge={badge} small pillId="sb-env">
+        {env}
+      </NavRow>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        aria-label={`Manage ${env}`}
+        className="qb-press absolute right-1.5 top-1/2 z-10 grid h-[22px] w-[22px] -translate-y-1/2 place-items-center rounded-[7px] bg-[#e8e8ec] text-[#84848c] opacity-0 transition-opacity hover:text-[var(--ink)] group-hover/env:opacity-100"
+      >
+        <MoreHorizontal size={14} />
+      </button>
     </div>
   );
 }

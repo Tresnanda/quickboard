@@ -1,6 +1,24 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+dist-ssr/
+*.local
+
+# Rust and Tauri
 src-tauri/target/
+src-tauri/gen/schemas/
+
+# Tooling
 .superpowers/
-.DS_Store
+
+# Logs
 *.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS and editor
+.DS_Store
+.idea/
+*.sw?

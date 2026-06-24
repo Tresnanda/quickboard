@@ -26,4 +26,5 @@ pub struct Item {
     pub updated_at: i64,
     pub last_used_at: i64,
     pub use_count: i64,
+    pub environment: String,
 }
