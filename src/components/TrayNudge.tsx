@@ -33,16 +33,16 @@ export function TrayNudge() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -12, scale: 0.97 }}
           transition={{ type: "spring", stiffness: 460, damping: 30 }}
-          className="absolute left-1/2 top-3 z-40 flex max-w-[calc(100%_-_1.5rem)] -translate-x-1/2 items-center gap-1.5 rounded-[16px] border border-black/[0.06] bg-white/90 py-1.5 pl-4 pr-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_14px_34px_-12px_rgba(0,0,0,0.32)] backdrop-blur-md"
+          className="absolute right-3 top-3 z-40 flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-[16px] border border-black/[0.06] bg-white/90 py-1.5 pl-4 pr-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_14px_34px_-12px_rgba(0,0,0,0.32)] backdrop-blur-md"
         >
           <span className="flex min-w-0 items-center gap-2 pr-1 text-[12.5px] font-semibold text-[var(--ink)]">
             <Layers size={14} className="shrink-0 text-[var(--muted)]" />
             <motion.span key={count} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 600, damping: 22 }} className="shrink-0 tabular-nums">
               {count}
             </motion.span>
-            <span className="truncate">{count === 1 ? "thing" : "things"} waiting in your tray</span>
+            <span className="min-w-0 truncate">{count === 1 ? "thing" : "things"} waiting in your tray</span>
           </span>
-          <button onClick={() => void invoke("show_tray")} className="shrink-0 rounded-[9px] px-2.5 py-1.5 text-[12px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
+          <button onClick={() => void invoke("show_tray")} className="hidden shrink-0 rounded-[9px] px-2.5 py-1.5 text-[12px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05] min-[560px]:block">
             Review
           </button>
           <motion.button

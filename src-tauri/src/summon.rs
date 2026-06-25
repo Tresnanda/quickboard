@@ -97,19 +97,23 @@ pub fn position_on_cursor_screen(win: &tauri::WebviewWindow) {
     }
 }
 
-/// Make a window a NON-activating, NON-key floating panel (plain NSPanel). Unlike
-/// the summon panel it must NOT become key — so clicking a tray chip never steals
-/// focus from the app you're in, and the pasted ⌘V lands there.
+/// Make a window a NON-activating floating panel (the tray). It becomes key ONLY
+/// when a control actually needs typing (the lane-name field) via
+/// `becomesKeyOnlyIfNeeded` — so clicking a row to paste never steals focus from
+/// the app you're in (the ⌘V still lands there), but text fields can be typed into.
 #[cfg(target_os = "macos")]
 pub fn make_float_panel(win: &tauri::WebviewWindow) {
     use objc2::ClassType;
     use objc2_app_kit::{NSPanel, NSWindowCollectionBehavior, NSWindowStyleMask};
     let Ok(ptr) = win.ns_window() else { return };
     unsafe {
-        objc2::ffi::object_setClass(ptr as *mut objc2::runtime::AnyObject, NSPanel::class() as *const objc2::runtime::AnyClass);
+        // QuickboardPanel returns canBecomeKeyWindow = true; becomesKeyOnlyIfNeeded
+        // keeps it from grabbing key on ordinary clicks, so paste behavior is intact.
+        objc2::ffi::object_setClass(ptr as *mut objc2::runtime::AnyObject, QuickboardPanel::class() as *const objc2::runtime::AnyClass);
         let panel: &NSPanel = &*(ptr as *const NSPanel);
         panel.setStyleMask(NSWindowStyleMask::NonactivatingPanel | NSWindowStyleMask::FullSizeContentView);
         panel.setCollectionBehavior(NSWindowCollectionBehavior::CanJoinAllSpaces | NSWindowCollectionBehavior::FullScreenAuxiliary);
+        panel.setBecomesKeyOnlyIfNeeded(true);
         panel.setHasShadow(false);
     }
 }

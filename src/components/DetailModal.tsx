@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { dragOutItem } from "../lib/drag";
-import { Fingerprint, Pencil, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Fingerprint, Maximize2, Pencil, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useItems, useSelectedItem } from "../lib/items-store";
 import { useAppearance } from "../lib/appearance";
 import { itemTint } from "../lib/tints";
@@ -69,6 +69,7 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
 
   // Image items: load the photo for the header (non-confidential only).
   const [cover, setCover] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false); // full-photo card-on-card
   useEffect(() => {
     if (type !== "image" || item.confidential) {
       setCover(null);
@@ -114,6 +115,7 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
   }
 
   return (
+    <>
     <Dialog.Portal forceMount>
       <Dialog.Overlay asChild forceMount>
         <motion.div
@@ -140,7 +142,15 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
               className={cn("relative overflow-hidden rounded-[var(--r-inner)]", cover ? "h-[180px] ring-1 ring-inset ring-black/10" : "h-[92px]")}
               style={cover ? undefined : { background: coverGradient(item.id, tint) }}
             >
-              {cover && <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+              {cover && (
+                <button type="button" onClick={() => setPreviewOpen(true)} aria-label="View full photo" className="group absolute inset-0 cursor-zoom-in">
+                  <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  <span className="pointer-events-none absolute bottom-3 right-3 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100">
+                    <Maximize2 size={15} />
+                  </span>
+                </button>
+              )}
               {!cover && <div className="qb-grain" />}
               <FavoriteButton
                 pinned={item.pinned}
@@ -294,5 +304,36 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
         </Dialog.Content>
       </div>
     </Dialog.Portal>
+
+    {/* full-photo preview — a card lifted above the detail card */}
+    <Dialog.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+      <AnimatePresence>
+        {previewOpen && cover && (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild forceMount>
+              <motion.div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
+            </Dialog.Overlay>
+            <div className="pointer-events-none fixed inset-0 z-[60] grid place-items-center p-8">
+              <Dialog.Content asChild forceMount onOpenAutoFocus={(e) => e.preventDefault()} aria-describedby={undefined}>
+                <motion.div
+                  className="pointer-events-auto relative rounded-[20px] bg-white p-2 shadow-[0_36px_90px_-24px_rgba(0,0,0,0.65)] ring-1 ring-black/10"
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: 10 }}
+                  animate={reduce ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+                  exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.94, y: 6 }}
+                  transition={reduce ? { duration: 0.2 } : { type: "spring", duration: 0.5, bounce: 0.16 }}
+                >
+                  <Dialog.Title className="sr-only">{item.label}</Dialog.Title>
+                  <img src={cover} alt={item.label} className="block max-h-[calc(88vh-1rem)] max-w-[min(900px,92vw)] rounded-[14px]" />
+                  <Dialog.Close className="qb-press absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-colors hover:bg-black/75" aria-label="Close preview">
+                    <X size={16} />
+                  </Dialog.Close>
+                </motion.div>
+              </Dialog.Content>
+            </div>
+          </Dialog.Portal>
+        )}
+      </AnimatePresence>
+    </Dialog.Root>
+    </>
   );
 }

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, Link2, Lock, Pencil, Plus, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
+import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { fileToTemp, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
+import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipboard, removeClip, useClipboard, type ClipEntry } from "../lib/clipboard";
@@ -19,6 +20,7 @@ import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
 
 const SPRING = { type: "spring", stiffness: 520, damping: 38, mass: 0.7 } as const;
+const EASE = [0.23, 1, 0.32, 1] as const; // strong ease-out for crossfades
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -59,11 +61,14 @@ function laneMatches(e: TrayEntry, active: string | null): boolean {
  * → a field); ↵ on hover pastes at the cursor. Non-key panel, so it never steals focus.
  */
 export function TrayDock() {
-  const { items } = useItems();
+  const { items, environments, activeEnvironment, reload } = useItems();
   const tray = useTray();
   const lanes = useLanes();
   const clips = useClipboard();
   const clipboardOn = useSettings().clipboardHistory;
+  const [mode, setMode] = useState<"tray" | "board">("tray"); // temporary staging vs saved-board browser
+  const [boardEnv, setBoardEnv] = useState("");
+  const [boardCats, setBoardCats] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"shelf" | "clipboard">("shelf");
   const [busy, setBusy] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -88,6 +93,23 @@ export function TrayDock() {
     const nn = newName.trim();
     renameLane(oldName, nn);
     if (activeLane === oldName && nn) setActiveLane(nn);
+  }
+
+  function switchMode(m: "tray" | "board") {
+    setMode(m);
+    setSelected(new Set());
+    if (m === "board") {
+      if (!boardEnv) setBoardEnv(activeEnvironment ?? environments[0] ?? "Personal");
+      void reload(); // pull the latest saved items from the store
+    }
+  }
+  function toggleCat(c: string) {
+    setBoardCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
   }
 
   function flashNotice(msg: string) {
@@ -133,7 +155,8 @@ export function TrayDock() {
       }
       if (staged) {
         sfx.save();
-        setTab("shelf"); // surface where it landed, even if the Clipboard tab was open
+        setMode("tray");
+        setTab("shelf"); // surface where it landed, whatever mode/tab was open
       }
       return;
     }
@@ -149,6 +172,7 @@ export function TrayDock() {
         const path = await stageBlobFile(await fileToDataUrl(blob), name);
         addToTray({ kind: "file", path, label: name, lane: dropLane });
         sfx.save();
+        setMode("tray");
         setTab("shelf");
         return;
       } catch {
@@ -160,6 +184,7 @@ export function TrayDock() {
     if (!text) return;
     addToTray({ kind: "text", value: text, label: text.split("\n")[0].slice(0, 48) || "Note", isUrl: /^https?:\/\//i.test(text), lane: dropLane });
     sfx.save();
+    setMode("tray");
     setTab("shelf");
   }
 
@@ -194,8 +219,24 @@ export function TrayDock() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // the shelf is filtered to the active lane; selection + counts scope to it
-  const visible = useMemo(() => tray.filter((e) => laneMatches(e, activeLane)), [tray, activeLane]);
+  // Board browser: saved items in the chosen env, filtered to the picked categories,
+  // mapped to item-entries so the same row / drag / paste machinery handles them.
+  const boardCatList = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of items) if (i.environment === boardEnv) set.add(i.category);
+    return Array.from(set).sort();
+  }, [items, boardEnv]);
+  const boardEntries = useMemo<TrayEntry[]>(
+    () =>
+      items
+        .filter((i) => i.environment === boardEnv && (boardCats.size === 0 || boardCats.has(i.category)))
+        .map((i) => ({ id: i.id, kind: "item", itemId: i.id, label: i.label })),
+    [items, boardEnv, boardCats],
+  );
+
+  // the active list: board entries (Board mode), or the shelf filtered to the active lane.
+  const trayVisible = useMemo(() => tray.filter((e) => laneMatches(e, activeLane)), [tray, activeLane]);
+  const visible = mode === "board" ? boardEntries : trayVisible;
   const selCount = useMemo(() => visible.filter((e) => selected.has(e.id)).length, [visible, selected]);
   const allSelected = visible.length > 0 && selCount === visible.length;
 
@@ -338,7 +379,7 @@ export function TrayDock() {
   const laneCategory = typeof activeLane === "string" && activeLane !== "" ? activeLane : "";
 
   return (
-    <div className="flex h-screen w-screen flex-col p-6 antialiased">
+    <div className="flex h-screen w-screen flex-col p-5 antialiased">
       <motion.div
         initial={false}
         animate={open ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.9, y: -10 }}
@@ -383,15 +424,32 @@ export function TrayDock() {
           )}
         </AnimatePresence>
 
-        {/* tabs — Shelf | Clipboard (drag the strip to move the window) */}
+        {/* mode switcher — Tray (staging) | Board (saved items) — drag to move window */}
         <div data-tauri-drag-region className="flex shrink-0 items-center gap-1.5 px-2.5 pb-1.5 pt-2.5">
           <div className="flex min-w-0 items-center gap-0.5 rounded-[10px] bg-black/[0.05] p-[3px]">
-            <TabButton active={tab === "shelf"} onClick={() => setTab("shelf")} icon={Layers} label="Shelf" count={tray.length} />
-            <TabButton active={tab === "clipboard"} onClick={() => setTab("clipboard")} icon={ClipboardList} label="Clipboard" count={clips.length} />
+            <TabButton seg="tray-mode" active={mode === "tray"} onClick={() => switchMode("tray")} icon={Layers} label="Tray" count={tray.length} />
+            <TabButton seg="tray-mode" active={mode === "board"} onClick={() => switchMode("board")} icon={LayoutGrid} label="Board" count={0} />
           </div>
+          {mode === "board" && <EnvPicker value={boardEnv} options={environments} onChange={(e) => { setBoardEnv(e); setBoardCats(new Set()); setSelected(new Set()); }} />}
           <div className="ml-auto flex shrink-0 items-center gap-1 pl-1">
+            {mode === "tray" && (
+              <motion.button
+                whileTap={{ scale: 0.88 }}
+                type="button"
+                onClick={() => setTab(tab === "clipboard" ? "shelf" : "clipboard")}
+                aria-label="Clipboard history"
+                title="Clipboard history"
+                className={cn(
+                  "relative grid h-6 w-6 place-items-center rounded-[7px] transition-colors",
+                  tab === "clipboard" ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:bg-black/[0.06] hover:text-[var(--ink)]",
+                )}
+              >
+                <ClipboardList size={13.5} strokeWidth={2.2} />
+                {clips.length > 0 && tab !== "clipboard" && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--ink)] ring-2 ring-[#fbfbfa]" />}
+              </motion.button>
+            )}
             <AnimatePresence mode="popLayout">
-              {tab === "shelf" && visible.length > 0 && (
+              {visible.length > 0 && (mode === "board" || tab === "shelf") && (
                 <motion.button
                   key="selall"
                   initial={{ scale: 0.6, opacity: 0 }}
@@ -419,31 +477,87 @@ export function TrayDock() {
         </div>
         <div className="mx-3 h-px bg-black/[0.06]" />
 
-        {/* lane chips — ad-hoc groups that filter the Shelf */}
-        {tab === "shelf" && (tray.length > 0 || lanes.length > 0) && (
-          <LaneBar
-            lanes={lanes}
-            tray={tray}
-            active={activeLane}
-            onChoose={chooseLane}
-            onCreate={(name) => {
-              addLane(name);
-              chooseLane(name);
-            }}
-            onRename={renameLaneTo}
-            onDelete={deleteLane}
-          />
+        {/* board mode: category chips (the environment lives up in the switcher row) */}
+        {mode === "board" && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}>
+            <BoardControls
+              env={boardEnv}
+              items={items}
+              cats={boardCats}
+              catList={boardCatList}
+              onToggleCat={toggleCat}
+              onAllCats={() => setBoardCats(new Set())}
+            />
+          </motion.div>
         )}
 
-        {/* lane — Shelf or Clipboard, crossfading on tab switch */}
+        {/* lane chips — ad-hoc groups that filter the Shelf */}
+        {mode === "tray" && tab === "shelf" && (tray.length > 0 || lanes.length > 0) && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}>
+            <LaneBar
+              lanes={lanes}
+              tray={tray}
+              active={activeLane}
+              onChoose={chooseLane}
+              onCreate={(name) => {
+                addLane(name);
+                chooseLane(name);
+              }}
+              onRename={renameLaneTo}
+              onDelete={deleteLane}
+            />
+          </motion.div>
+        )}
+
+        {/* list — Board items, or the Shelf/Clipboard lane. Mode switch blur-crossfades. */}
         <div className="qb-scroll min-h-0 flex-1 overflow-auto p-1.5">
+          <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={mode}
+            initial={{ opacity: 0, filter: "blur(7px)" }}
+            animate={{ opacity: 1, filter: "blur(0.01px)" }}
+            exit={{ opacity: 0, filter: "blur(7px)" }}
+            transition={{ duration: 0.2, ease: EASE }}
+            style={{ willChange: "opacity, filter" }}
+            className="flex min-h-full flex-col"
+          >
+          {mode === "board" ? (
+            visible.length === 0 ? (
+              <LaneEmpty
+                icon={LayoutGrid}
+                title={environments.length === 0 ? "No saved items yet" : "Nothing here"}
+                hint={environments.length === 0 ? "Save items to your board, then pull them out here." : "Pick an environment and categories to pull from."}
+              />
+            ) : (
+              <div className="flex min-h-full flex-col">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {visible.map((e) => (
+                    <TrayRow
+                      key={e.id}
+                      entry={e}
+                      item={itemFor(e)}
+                      flash={flashId === e.id}
+                      selected={selected.has(e.id)}
+                      anySelected={selCount > 0}
+                      fileLike={fileLikeOf(e)}
+                      confidential={confidentialOf(e)}
+                      onSelect={() => toggleSelect(e.id)}
+                      onDrag={() => void dragOut(e)}
+                      onPaste={() => void paste(e)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )
+          ) : (
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={tab}
-              initial={{ opacity: 0, x: tab === "shelf" ? -10 : 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: tab === "shelf" ? 10 : -10 }}
-              transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+              initial={{ opacity: 0, filter: "blur(6px)" }}
+              animate={{ opacity: 1, filter: "blur(0.01px)" }}
+              exit={{ opacity: 0, filter: "blur(6px)" }}
+              transition={{ duration: 0.16, ease: EASE }}
+              style={{ willChange: "opacity, filter" }}
               className="flex min-h-full flex-col"
             >
               {tab === "shelf" ? (
@@ -495,9 +609,13 @@ export function TrayDock() {
               )}
             </motion.div>
           </AnimatePresence>
+          )}
+          </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* actions */}
+        {/* actions — Tray mode only (Board items are already saved) */}
+        {mode === "tray" && (
         <AnimatePresence initial={false}>
           {((tab === "shelf" && tray.length > 0) || (tab === "clipboard" && clips.length > 0)) && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }} className="flex shrink-0 items-center gap-2 border-t border-black/[0.06] px-2.5 py-2">
@@ -521,6 +639,19 @@ export function TrayDock() {
             </motion.div>
           )}
         </AnimatePresence>
+        )}
+
+        {/* board mode footer — pull-out hint + clear selection */}
+        {mode === "board" && visible.length > 0 && (
+          <div className="flex shrink-0 items-center gap-2 border-t border-black/[0.06] px-2.5 py-2">
+            <span className="text-[11px] text-[var(--faint)]">{selCount > 0 ? `${selCount} selected · drag any out` : "Drag items out, or click text to paste"}</span>
+            {selCount > 0 && (
+              <button type="button" onClick={() => setSelected(new Set())} className="ml-auto rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -549,18 +680,22 @@ function TrayRow({
   onSelect: () => void;
   onDrag: () => void;
   onPaste: () => void;
-  onRemove: () => void;
+  onRemove?: () => void;
 }) {
-  // staged image files show a real thumbnail so a pile of refs is scannable
+  // real thumbnails so a pile of refs / saved images is scannable — staged image
+  // files read off disk, saved board images decrypt through the store.
   const [thumb, setThumb] = useState<string | null>(null);
-  const isImage = entry.kind === "file" && !!entry.path && IMG_RE.test(entry.path);
+  const isFileImage = entry.kind === "file" && !!entry.path && IMG_RE.test(entry.path);
+  const isItemImage = entry.kind === "item" && !confidential && !!item && contentType(item) === "image";
   useEffect(() => {
     let on = true;
-    if (isImage && entry.path) void readImageAsDataUrl(entry.path).then((d) => on && setThumb(d)).catch(() => {});
+    setThumb(null);
+    if (isFileImage && entry.path) void readImageAsDataUrl(entry.path).then((d) => on && setThumb(d)).catch(() => {});
+    else if (isItemImage && item) void getImageDataUrl(item.id).then((d) => on && setThumb(d)).catch(() => {});
     return () => {
       on = false;
     };
-  }, [entry.path, isImage]);
+  }, [entry.path, entry.kind, isFileImage, isItemImage, item?.id]);
 
   let Icon = entry.isUrl ? Link2 : StickyNote;
   let tintColor = TINTS.violet.tileInk;
@@ -598,7 +733,7 @@ function TrayRow({
       onClick={() => canPaste && onPaste()}
       title={hint}
       className={cn(
-        "group/row relative flex select-none items-center gap-2 rounded-[11px] py-2 pl-1.5 pr-2 transition-colors",
+        "group/row relative flex select-none items-center gap-2.5 rounded-[12px] py-2.5 pl-1.5 pr-2 transition-colors",
         cursor,
         selected ? "bg-[#edeff5]" : "hover:bg-black/[0.04]",
       )}
@@ -622,8 +757,19 @@ function TrayRow({
         </span>
       </button>
 
-      <motion.span whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 18 }} className="relative z-10 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[7px]" style={{ color: tintColor }}>
-        {thumb ? <img src={thumb} alt="" className="h-full w-full rounded-[7px] object-cover ring-1 ring-inset ring-black/[0.07]" /> : <Icon size={17} strokeWidth={1.9} />}
+      <motion.span whileHover={{ scale: 1.08 }} transition={{ type: "spring", stiffness: 400, damping: 18 }} className="relative z-10 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[9px]" style={{ color: tintColor }}>
+        {thumb ? (
+          <motion.img
+            src={thumb}
+            alt=""
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25, ease: EASE }}
+            className="h-full w-full rounded-[9px] object-cover ring-1 ring-inset ring-black/[0.07]"
+          />
+        ) : (
+          <Icon size={19} strokeWidth={1.9} />
+        )}
       </motion.span>
       <span className="relative z-10 min-w-0 flex-1">
         <span className="block truncate text-[12.5px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{entry.label}</span>
@@ -646,9 +792,11 @@ function TrayRow({
                   <CornerDownLeft size={12} />
                 </motion.button>
               )}
-              <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onRemove(); }} aria-label="Remove" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--faint)] hover:bg-black/[0.06] hover:text-[#b4424f]">
-                <X size={12} />
-              </motion.button>
+              {onRemove && (
+                <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onRemove(); }} aria-label="Remove" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--faint)] hover:bg-black/[0.06] hover:text-[#b4424f]">
+                  <X size={12} />
+                </motion.button>
+              )}
             </motion.span>
           )}
         </AnimatePresence>
@@ -657,10 +805,10 @@ function TrayRow({
   );
 }
 
-function TabButton({ active, onClick, icon: Icon, label, count }: { active: boolean; onClick: () => void; icon: LucideIcon; label: string; count: number }) {
+function TabButton({ active, onClick, icon: Icon, label, count, seg = "tray-tab" }: { active: boolean; onClick: () => void; icon: LucideIcon; label: string; count: number; seg?: string }) {
   return (
     <button type="button" onClick={onClick} className="relative rounded-[8px] px-2 py-1">
-      {active && <motion.span layoutId="tray-tab" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-[8px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.09),0_1px_1px_rgba(0,0,0,0.04)]" />}
+      {active && <motion.span layoutId={seg} transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-[8px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.09),0_1px_1px_rgba(0,0,0,0.04)]" />}
       <span className={cn("relative z-10 flex items-center gap-1.5 text-[11.5px] font-semibold transition-colors", active ? "text-[var(--ink)]" : "text-[var(--muted)]")}>
         <Icon size={12.5} strokeWidth={2.2} />
         {label}
@@ -671,7 +819,9 @@ function TabButton({ active, onClick, icon: Icon, label, count }: { active: bool
 }
 
 // The ad-hoc "lane" chips under the Shelf tabs: All · <lanes> · Unsorted · +.
-// Click to filter; the active lane chip exposes rename + delete; + creates one.
+// Click a chip to filter. The active lane carries a ⋯ menu (Rename / Delete);
+// + creates one. The ⋯ menu renders through a portal so the scrolling chip row
+// can't clip it.
 function LaneBar({
   lanes,
   tray,
@@ -713,7 +863,7 @@ function LaneBar({
       <LaneChip label="All" count={tray.length} active={active === null} onClick={() => onChoose(null)} />
       {lanes.map((l) =>
         editing === l ? (
-          <LaneInput key={l} value={draft} onChange={setDraft} onCommit={commit} onCancel={cancel} />
+          <LaneInput key={l} value={draft} onChange={setDraft} onCommit={commit} onCancel={cancel} placeholder="Lane name" />
         ) : (
           <LaneChip
             key={l}
@@ -721,17 +871,14 @@ function LaneBar({
             count={tray.filter((e) => e.lane === l).length}
             active={active === l}
             onClick={() => onChoose(l)}
-            onRename={() => {
-              setEditing(l);
-              setDraft(l);
-            }}
+            onRename={() => { setEditing(l); setDraft(l); }}
             onDelete={() => onDelete(l)}
           />
         ),
       )}
       {unsorted > 0 && <LaneChip label="Unsorted" icon={Inbox} count={unsorted} active={active === ""} onClick={() => onChoose("")} />}
       {editing === "" ? (
-        <LaneInput value={draft} onChange={setDraft} onCommit={commit} onCancel={cancel} />
+        <LaneInput value={draft} onChange={setDraft} onCommit={commit} onCancel={cancel} placeholder="New lane" />
       ) : (
         <button type="button" onClick={() => { setEditing(""); setDraft(""); }} aria-label="New lane" className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-black/[0.05] text-[var(--muted)] transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)]">
           <Plus size={14} strokeWidth={2.4} />
@@ -758,46 +905,94 @@ function LaneChip({
   onRename?: () => void;
   onDelete?: () => void;
 }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const dotsRef = useRef<HTMLButtonElement>(null);
   const manageable = active && !!onRename && !!onDelete;
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("resize", close);
+    };
+  }, [menu]);
+
   const body = (
     <>
       {Icon && <Icon size={11} strokeWidth={2.3} />}
-      <span className="max-w-[88px] truncate">{label}</span>
+      <span className="max-w-[96px] truncate">{label}</span>
       <span className={cn("tabular", active ? "text-white/55" : "text-[var(--faint)]")}>{count}</span>
     </>
   );
+
   if (!manageable) {
     return (
-      <button
+      <motion.button
         type="button"
         onClick={onClick}
+        whileTap={{ scale: 0.93 }}
+        transition={{ type: "spring", stiffness: 600, damping: 26 }}
         className={cn(
-          "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
-          active ? "bg-[var(--ink)] text-white" : "bg-black/[0.05] text-[var(--muted)] hover:bg-black/[0.08]",
+          "relative flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+          active ? "text-white" : "bg-black/[0.05] text-[var(--muted)] hover:bg-black/[0.08]",
         )}
       >
-        {body}
-      </button>
+        {active && <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />}
+        <span className="relative z-10 flex items-center gap-1">{body}</span>
+      </motion.button>
     );
   }
+
   return (
-    <div className="flex shrink-0 items-center rounded-full bg-[var(--ink)] py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white">
-      <button type="button" onClick={onClick} className="flex items-center gap-1">
+    <div className="relative flex shrink-0 items-center rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white">
+      <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />
+      <button type="button" onClick={onClick} className="relative z-10 flex items-center gap-1">
         {body}
       </button>
-      <span className="ml-1 flex items-center gap-0.5">
-        <button type="button" onClick={onRename} aria-label="Rename lane" className="grid h-[18px] w-[18px] place-items-center rounded-full text-white/65 hover:bg-white/15 hover:text-white">
-          <Pencil size={10} strokeWidth={2.4} />
-        </button>
-        <button type="button" onClick={onDelete} aria-label="Delete lane" className="grid h-[18px] w-[18px] place-items-center rounded-full text-white/65 hover:bg-white/15 hover:text-white">
-          <Trash2 size={10} strokeWidth={2.2} />
-        </button>
-      </span>
+      <button
+        ref={dotsRef}
+        type="button"
+        aria-label="Lane options"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (menu) {
+            setMenu(null);
+            return;
+          }
+          const r = dotsRef.current?.getBoundingClientRect();
+          if (r) setMenu({ x: Math.min(r.left, window.innerWidth - 152), y: r.bottom + 6 });
+        }}
+        className="relative z-10 ml-1 grid h-[18px] w-[18px] place-items-center rounded-full text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+      >
+        <MoreHorizontal size={12} strokeWidth={2.4} />
+      </button>
+      {menu &&
+        createPortal(
+          <motion.div
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.92, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.14, ease: EASE }}
+            style={{ position: "fixed", left: menu.x, top: menu.y, zIndex: 80, transformOrigin: "top left" }}
+            className="min-w-[140px] overflow-hidden rounded-[11px] border border-black/[0.08] bg-white p-1 text-[var(--ink)] shadow-[0_12px_34px_-10px_rgba(0,0,0,0.5)]"
+          >
+            <button type="button" onClick={() => { setMenu(null); onRename?.(); }} className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[12px] font-semibold transition-colors hover:bg-black/[0.05]">
+              <Pencil size={12} className="text-[var(--muted)]" /> Rename
+            </button>
+            <button type="button" onClick={() => { setMenu(null); onDelete?.(); }} className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[12px] font-semibold text-[#b4424f] transition-colors hover:bg-[#b4424f]/[0.08]">
+              <Trash2 size={12} /> Delete
+            </button>
+          </motion.div>,
+          document.body,
+        )}
     </div>
   );
 }
 
-function LaneInput({ value, onChange, onCommit, onCancel }: { value: string; onChange: (v: string) => void; onCommit: () => void; onCancel: () => void }) {
+function LaneInput({ value, onChange, onCommit, onCancel, placeholder = "Lane name" }: { value: string; onChange: (v: string) => void; onCommit: () => void; onCancel: () => void; placeholder?: string }) {
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 ring-1 ring-[var(--ink)]/30">
       <input
@@ -809,8 +1004,8 @@ function LaneInput({ value, onChange, onCommit, onCancel }: { value: string; onC
           else if (e.key === "Escape") onCancel();
         }}
         onBlur={onCommit}
-        placeholder="Lane name"
-        className="w-[80px] bg-transparent text-[11px] font-semibold text-[var(--ink)] placeholder:font-medium placeholder:text-[var(--fainter)] focus:outline-none"
+        placeholder={placeholder}
+        className="w-[88px] bg-transparent text-[11px] font-semibold text-[var(--ink)] placeholder:font-medium placeholder:text-[var(--fainter)] focus:outline-none"
       />
       <button type="button" onMouseDown={(e) => { e.preventDefault(); onCommit(); }} aria-label="Confirm" className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full bg-[var(--ink)] text-white">
         <Check size={11} strokeWidth={2.8} />
@@ -863,6 +1058,110 @@ function MoveMenu({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | 
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// Board mode: pick the environment to pull from, then multi-select categories.
+function BoardControls({
+  env,
+  items,
+  cats,
+  catList,
+  onToggleCat,
+  onAllCats,
+}: {
+  env: string;
+  items: Item[];
+  cats: Set<string>;
+  catList: string[];
+  onToggleCat: (c: string) => void;
+  onAllCats: () => void;
+}) {
+  const envCount = items.filter((i) => i.environment === env).length;
+  return (
+    <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-2.5 pb-1.5 pt-1 [&::-webkit-scrollbar]:hidden">
+      <CatChip label="All" count={envCount} active={cats.size === 0} onClick={onAllCats} />
+      {catList.map((c) => (
+        <CatChip key={c} label={c} count={items.filter((i) => i.environment === env && i.category === c).length} active={cats.has(c)} onClick={() => onToggleCat(c)} />
+      ))}
+    </div>
+  );
+}
+
+function EnvPicker({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("resize", close);
+    };
+  }, [menu]);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (menu) {
+            setMenu(null);
+            return;
+          }
+          const r = ref.current?.getBoundingClientRect();
+          if (r) setMenu({ x: r.left, y: r.bottom + 6 });
+        }}
+        className="flex shrink-0 items-center gap-1 rounded-[9px] bg-black/[0.05] px-2.5 py-1.5 text-[12px] font-semibold text-[var(--ink)] transition-colors hover:bg-black/[0.08]"
+      >
+        <span className="max-w-[100px] truncate">{value || "Environment"}</span>
+        <ChevronDown size={13} className={cn("shrink-0 text-[var(--muted)] transition-transform", menu && "rotate-180")} />
+      </button>
+      {menu &&
+        createPortal(
+          <motion.div
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.92, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.14, ease: EASE }}
+            style={{ position: "fixed", left: menu.x, top: menu.y, zIndex: 80, transformOrigin: "top left" }}
+            className="max-h-[220px] min-w-[160px] overflow-y-auto rounded-[11px] border border-black/[0.08] bg-white p-1 shadow-[0_12px_34px_-10px_rgba(0,0,0,0.5)] [&::-webkit-scrollbar]:hidden"
+          >
+            {options.length === 0 ? (
+              <div className="px-2.5 py-2 text-[12px] text-[var(--faint)]">No environments yet</div>
+            ) : (
+              options.map((o) => (
+                <button key={o} type="button" onClick={() => { onChange(o); setMenu(null); }} className={cn("flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-[12px] font-semibold transition-colors hover:bg-black/[0.05]", o === value ? "text-[var(--ink)]" : "text-[var(--muted)]")}>
+                  {o}
+                  {o === value && <Check size={12} className="ml-auto text-[var(--ink)]" />}
+                </button>
+              ))
+            )}
+          </motion.div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+function CatChip({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      whileTap={{ scale: 0.93 }}
+      transition={{ type: "spring", stiffness: 600, damping: 26 }}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+        active ? "bg-[var(--ink)] text-white" : "bg-black/[0.05] text-[var(--muted)] hover:bg-black/[0.08]",
+      )}
+    >
+      <span className="max-w-[110px] truncate">{label}</span>
+      <span className={cn("tabular", active ? "text-white/55" : "text-[var(--faint)]")}>{count}</span>
+    </motion.button>
   );
 }
 
