@@ -3,10 +3,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { Check, ChevronLeft, CornerDownLeft, Download, Plus, Search } from "lucide-react";
+import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Link2, Plus, Search, StickyNote } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { addFile, addText, getImageDataUrl, getTextValue } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
+import { clipPreview, filterClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
 import { getAppearance, setAppearance } from "../lib/appearance";
@@ -17,12 +18,15 @@ import { contentType } from "../lib/content-type";
 import { TINTS, itemTint } from "../lib/tints";
 import { cn } from "../lib/utils";
 import type { Item } from "../lib/types";
+import { relativeTime } from "./ItemCard";
 
 const MAX = 8;
 // Snappy: the selection cursor glides fast; everything else is instant so typing
 // never waits on motion (emil: a panel used this often should not animate its list).
 const SEL = { type: "spring", stiffness: 1100, damping: 60, mass: 0.5 } as const;
 const POP = { type: "spring", stiffness: 700, damping: 26 } as const;
+
+type SummonResult = { kind: "item"; item: Item } | { kind: "clip"; clip: ClipEntry };
 
 /**
  * The always-available "summon anywhere" panel. Retrieve (↵ pastes to cursor) +
@@ -32,6 +36,7 @@ const POP = { type: "spring", stiffness: 700, damping: 26 } as const;
  */
 export function SummonPanel() {
   const { items, reload, environments } = useItems();
+  const clips = useClipboard();
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -113,13 +118,27 @@ export function SummonPanel() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [items, scopeEnv]);
 
-  const results = useMemo(() => {
+  const boardResults = useMemo(() => {
     const s = q.trim().toLowerCase();
     const list = s
       ? scoped.filter((i) => i.label.toLowerCase().includes(s) || i.category.toLowerCase().includes(s) || i.environment.toLowerCase().includes(s))
       : [...scoped].sort((a, b) => (b.last_used_at || b.created_at) - (a.last_used_at || a.created_at));
-    return list.slice(0, MAX);
+    return list.slice(0, s ? 5 : MAX);
   }, [scoped, q]);
+
+  const clipResults = useMemo(() => {
+    const limit = MAX - boardResults.length;
+    if (limit <= 0) return [];
+    return filterClips(clips, q).filter((c) => c.kind === "text").slice(0, limit);
+  }, [boardResults.length, clips, q]);
+
+  const results = useMemo<SummonResult[]>(
+    () => [
+      ...boardResults.map((item) => ({ kind: "item" as const, item })),
+      ...clipResults.map((clip) => ({ kind: "clip" as const, clip })),
+    ],
+    [boardResults, clipResults],
+  );
 
   useEffect(() => {
     if (idx >= results.length) setIdx(0);
@@ -147,11 +166,11 @@ export function SummonPanel() {
   }
 
   async function copyHighlighted() {
-    const it = results[idx];
-    if (!it || busy || it.kind === "File") return;
+    const result = results[idx];
+    if (!result || busy || (result.kind === "item" && result.item.kind === "File")) return;
     setBusy(true);
     try {
-      const value = await getTextValue(it.id);
+      const value = result.kind === "clip" ? result.clip.value ?? "" : await getTextValue(result.item.id);
       await navigator.clipboard.writeText(value);
       sfx.move();
       showFlash("Copied");
@@ -162,9 +181,26 @@ export function SummonPanel() {
     }
   }
 
+  async function pasteClip(clip: ClipEntry) {
+    if (busy) return;
+    setBusy(true);
+    sfx.paste();
+    try {
+      await navigator.clipboard.writeText(clip.value ?? "");
+      await invoke("summon_paste");
+    } catch {
+      await invoke("summon_hide");
+    }
+  }
+
   async function pick(i: number) {
-    const it = results[i];
-    if (!it || busy) return;
+    const result = results[i];
+    if (!result || busy) return;
+    if (result.kind === "clip") {
+      await pasteClip(result.clip);
+      return;
+    }
+    const it = result.item;
     if (it.kind === "File") {
       // can't paste a file as text — stage it to the tray to drag out
       addToTray({ kind: "item", itemId: it.id, label: it.label });
@@ -181,6 +217,24 @@ export function SummonPanel() {
       await invoke("summon_paste");
     } catch {
       await invoke("summon_hide");
+    }
+  }
+
+  async function saveClip(clip: ClipEntry) {
+    const value = clip.value?.trim();
+    if (!value || busy) return;
+    setBusy(true);
+    try {
+      const env = getSettings().defaultEnvironment ?? "Personal";
+      const id = await addText(clip.label, "Uncategorized", env, false, value);
+      setAppearance(id, { type: clip.isUrl ? "link" : "note" });
+      await reload();
+      sfx.save();
+      showFlash("Saved to board");
+    } catch {
+      showFlash("Couldn't save");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -232,9 +286,15 @@ export function SummonPanel() {
 
   // stage to the floating tray: the highlighted result, else the typed text
   function stage() {
-    const it = results[idx];
-    if (it) {
+    const result = results[idx];
+    if (result?.kind === "item") {
+      const it = result.item;
       addToTray({ kind: "item", itemId: it.id, label: it.label });
+      void invoke("show_tray");
+      sfx.move();
+      showFlash("Added to tray");
+    } else if (result?.kind === "clip") {
+      addToTray({ kind: "text", value: result.clip.value ?? "", label: result.clip.label, isUrl: result.clip.isUrl });
       void invoke("show_tray");
       sfx.move();
       showFlash("Added to tray");
@@ -259,7 +319,9 @@ export function SummonPanel() {
       stage();
     } else if ((e.metaKey || e.ctrlKey) && k === "Enter") {
       e.preventDefault();
-      void save();
+      const result = results[idx];
+      if (result?.kind === "clip") void saveClip(result.clip);
+      else void save();
     } else if ((e.metaKey || e.ctrlKey) && (k === "c" || k === "C")) {
       e.preventDefault();
       void copyHighlighted();
@@ -409,7 +471,26 @@ export function SummonPanel() {
               {canSave && <Kbd>⌘↵</Kbd>}
             </motion.button>
           ) : (
-            results.map((it, i) => <ResultRow key={it.id} item={it} active={i === idx} onClick={() => void pick(i)} onHover={() => { if (moved.current) setIdx(i); }} />)
+            <>
+              {boardResults.map((it, i) => (
+                <ResultRow key={it.id} item={it} active={i === idx} onClick={() => void pick(i)} onHover={() => { if (moved.current) setIdx(i); }} />
+              ))}
+              {clipResults.length > 0 && (
+                <div className="px-2.5 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--fainter)]">Recent copies</div>
+              )}
+              {clipResults.map((clip, i) => {
+                const resultIndex = boardResults.length + i;
+                return (
+                  <ClipResultRow
+                    key={clip.id}
+                    clip={clip}
+                    active={resultIndex === idx}
+                    onClick={() => void pick(resultIndex)}
+                    onHover={() => { if (moved.current) setIdx(resultIndex); }}
+                  />
+                );
+              })}
+            </>
           )}
         </div>
 
@@ -548,6 +629,47 @@ function ResultRow({ item, active, onClick, onHover }: { item: Item; active: boo
                 <CornerDownLeft size={12} /> paste
               </>
             )}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function ClipResultRow({ clip, active, onClick, onHover }: { clip: ClipEntry; active: boolean; onClick: () => void; onHover: () => void }) {
+  const Icon = clip.isUrl ? Link2 : StickyNote;
+  const preview = clipPreview(clip);
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+
+  return (
+    <motion.div
+      ref={rowRef}
+      onPointerEnter={onHover}
+      onClick={onClick}
+      className="relative flex cursor-pointer select-none items-center gap-3 rounded-[14px] px-2.5 py-2.5"
+    >
+      {active && <motion.div layoutId="sel-bg" transition={SEL} className="absolute inset-0 rounded-[14px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_26px_-12px_rgba(0,0,0,0.24)] ring-1 ring-black/[0.05]" />}
+      <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" style={{ color: TINTS.sky.tileInk }}>
+        <Icon size={19} strokeWidth={1.9} />
+      </span>
+      <span className="relative z-10 min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{clip.label}</span>
+        <span className="mt-px block truncate text-[11.5px] text-[var(--faint)]">{preview || "Copied text"}</span>
+      </span>
+      <AnimatePresence>
+        {active && (
+          <motion.span
+            key="hint"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 8 }}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            className="relative z-10 flex shrink-0 items-center gap-1.5 pr-1 text-[11px] font-medium text-[var(--muted)]"
+          >
+            <ClipboardList size={12} /> {relativeTime(clip.ts)}
           </motion.span>
         )}
       </AnimatePresence>

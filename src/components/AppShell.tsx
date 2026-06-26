@@ -6,7 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Sparkles } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { useSettings } from "../lib/settings";
-import { addClip } from "../lib/clipboard";
+import { addClip, labelForClipValue } from "../lib/clipboard";
 import { Sidebar } from "./Sidebar";
 import { DetailModal } from "./DetailModal";
 import { NewItemSheet } from "./NewItemSheet";
@@ -65,7 +65,7 @@ export function AppShell() {
     const un = listen<{ value?: string; isUrl?: boolean }>("clipboard:new", (e) => {
       const value = e.payload?.value;
       if (!value) return;
-      addClip({ kind: "text", value, label: value.split("\n")[0].slice(0, 60) || "Copied", isUrl: !!e.payload?.isUrl });
+      addClip({ kind: "text", value, label: labelForClipValue(value), isUrl: !!e.payload?.isUrl });
     });
     return () => {
       void un.then((f) => f());

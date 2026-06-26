@@ -3,12 +3,12 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
+import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, useLanes, useTray, type TrayEntry } from "../lib/tray";
-import { clearClipboard, removeClip, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clearClipboard, clipPreview, filterClips, removeClip, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
 import { relativeTime } from "./ItemCard";
@@ -77,6 +77,7 @@ export function TrayDock() {
   const [dropping, setDropping] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [activeLane, setActiveLane] = useState<string | null>(null); // null=All, ""=Unsorted, else a lane
+  const [clipQuery, setClipQuery] = useState("");
   const activeLaneRef = useRef<string | null>(null);
   activeLaneRef.current = activeLane;
 
@@ -236,6 +237,7 @@ export function TrayDock() {
 
   // the active list: board entries (Board mode), or the shelf filtered to the active lane.
   const trayVisible = useMemo(() => tray.filter((e) => laneMatches(e, activeLane)), [tray, activeLane]);
+  const visibleClips = useMemo(() => filterClips(clips, clipQuery), [clips, clipQuery]);
   const visible = mode === "board" ? boardEntries : trayVisible;
   const selCount = useMemo(() => visible.filter((e) => selected.has(e.id)).length, [visible, selected]);
   const allSelected = visible.length > 0 && selCount === visible.length;
@@ -509,6 +511,20 @@ export function TrayDock() {
           </motion.div>
         )}
 
+        {mode === "tray" && tab === "clipboard" && clips.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18, ease: EASE }} className="px-2.5 pb-1.5 pt-1">
+            <div className="flex h-[30px] items-center gap-2 rounded-[10px] bg-black/[0.05] px-2.5">
+              <Search size={13} className="shrink-0 text-[var(--fainter)]" />
+              <input
+                value={clipQuery}
+                onChange={(e) => setClipQuery(e.target.value)}
+                placeholder="Search recent copies..."
+                className="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[var(--ink)] outline-none placeholder:text-[var(--fainter)]"
+              />
+            </div>
+          </motion.div>
+        )}
+
         {/* list — Board items, or the Shelf/Clipboard lane. Mode switch blur-crossfades. */}
         <div className="qb-scroll min-h-0 flex-1 overflow-auto p-1.5">
           <AnimatePresence mode="wait" initial={false}>
@@ -600,9 +616,11 @@ export function TrayDock() {
                     </motion.button>
                   </div>
                 )
+              ) : visibleClips.length === 0 ? (
+                <LaneEmpty icon={Search} title="No matching clips" hint="Search checks the full copied text, not just the first line." />
               ) : (
                 <AnimatePresence initial={false} mode="popLayout">
-                  {clips.map((c) => (
+                  {visibleClips.map((c) => (
                     <ClipRow key={c.id} clip={c} flash={flashId === c.id} onPaste={() => void pasteClip(c)} onPin={() => pinClip(c)} onRemove={() => removeClip(c.id)} />
                   ))}
                 </AnimatePresence>
@@ -1180,6 +1198,7 @@ function LaneEmpty({ icon: Icon, title, hint }: { icon: LucideIcon; title: strin
 function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; flash: boolean; onPaste: () => void; onPin: () => void; onRemove: () => void }) {
   const Icon = clip.kind === "image" ? ImageIcon : clip.isUrl ? Link2 : StickyNote;
   const canDrag = clip.kind === "text";
+  const preview = clipPreview(clip);
   return (
     <motion.div
       layout
@@ -1208,7 +1227,8 @@ function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; f
       </span>
       <span className="relative z-10 min-w-0 flex-1">
         <span className="block truncate text-[12.5px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{clip.label}</span>
-        <span className="block truncate text-[10.5px] text-[var(--faint)] tabular">{relativeTime(clip.ts)}</span>
+        <span className="block truncate text-[10.5px] text-[var(--faint)]">{preview && preview !== clip.label ? preview : relativeTime(clip.ts)}</span>
+        {preview && preview !== clip.label && <span className="block truncate text-[10px] text-[var(--fainter)] tabular">{relativeTime(clip.ts)}</span>}
       </span>
       <div className="relative z-10 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
         {clip.kind === "text" && (
