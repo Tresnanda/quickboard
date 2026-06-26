@@ -311,17 +311,29 @@ pub fn set_clipboard_watch(enabled: bool) {
 }
 
 /// Background pasteboard poll for the Clipboard lane. Emits `clipboard:new`
-/// { value, isUrl } for each fresh copy while enabled — skipping password-manager
+/// { value, isUrl, sourceApp } for each fresh copy while enabled — skipping password-manager
 /// / transient copies and whatever was already on the clipboard at launch.
 #[cfg(target_os = "macos")]
 pub fn start_clipboard_watch(app: tauri::AppHandle) {
-    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString, NSWorkspace};
     use std::sync::atomic::Ordering;
     use tauri::Emitter;
+    fn frontmost_app_name() -> Option<String> {
+        NSWorkspace::sharedWorkspace()
+            .frontmostApplication()
+            .and_then(|front| front.localizedName())
+            .map(|name| name.to_string())
+            .filter(|name| !name.trim().is_empty())
+    }
     std::thread::spawn(move || {
         let mut last: isize = -1;
+        let mut last_frontmost_app = frontmost_app_name();
         loop {
             std::thread::sleep(std::time::Duration::from_millis(600));
+            let current_frontmost_app = frontmost_app_name();
+            // ponytail: stable-app heuristic; omit source if the user switched apps between polls.
+            let source_app = if current_frontmost_app == last_frontmost_app { current_frontmost_app.clone() } else { None };
+            last_frontmost_app = current_frontmost_app;
             let pb = NSPasteboard::generalPasteboard();
             let cc = pb.changeCount();
             if cc == last {
@@ -356,7 +368,7 @@ pub fn start_clipboard_watch(app: tauri::AppHandle) {
                     continue;
                 }
                 let is_url = trimmed.starts_with("http://") || trimmed.starts_with("https://");
-                let _ = app.emit("clipboard:new", serde_json::json!({ "value": value, "isUrl": is_url }));
+                let _ = app.emit("clipboard:new", serde_json::json!({ "value": value, "isUrl": is_url, "sourceApp": source_app }));
             }
         }
     });

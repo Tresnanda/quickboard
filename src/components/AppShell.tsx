@@ -62,10 +62,10 @@ export function AppShell() {
     const enabled = settings.clipboardHistory;
     void invoke("set_clipboard_watch", { enabled });
     if (!enabled) return;
-    const un = listen<{ value?: string; isUrl?: boolean }>("clipboard:new", (e) => {
+    const un = listen<{ value?: string; isUrl?: boolean; sourceApp?: string | null }>("clipboard:new", (e) => {
       const value = e.payload?.value;
       if (!value) return;
-      addClip({ kind: "text", value, label: labelForClipValue(value), isUrl: !!e.payload?.isUrl });
+      addClip({ kind: "text", value, label: labelForClipValue(value), isUrl: !!e.payload?.isUrl, sourceApp: e.payload?.sourceApp?.trim() || undefined });
     });
     return () => {
       void un.then((f) => f());

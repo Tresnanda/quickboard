@@ -639,6 +639,7 @@ function ResultRow({ item, active, onClick, onHover }: { item: Item; active: boo
 function ClipResultRow({ clip, active, onClick, onHover }: { clip: ClipEntry; active: boolean; onClick: () => void; onHover: () => void }) {
   const Icon = clip.isUrl ? Link2 : StickyNote;
   const preview = clipPreview(clip);
+  const source = clip.sourceApp?.trim();
   const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (active) rowRef.current?.scrollIntoView({ block: "nearest" });
@@ -667,9 +668,9 @@ function ClipResultRow({ clip, active, onClick, onHover }: { clip: ClipEntry; ac
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 8 }}
             transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="relative z-10 flex shrink-0 items-center gap-1.5 pr-1 text-[11px] font-medium text-[var(--muted)]"
+            className="relative z-10 flex max-w-[170px] shrink-0 items-center gap-1.5 pr-1 text-[11px] font-medium text-[var(--muted)]"
           >
-            <ClipboardList size={12} /> {relativeTime(clip.ts)}
+            <ClipboardList size={12} className="shrink-0" /> <span className="truncate">{source ? `${source} · ${relativeTime(clip.ts)}` : relativeTime(clip.ts)}</span>
           </motion.span>
         )}
       </AnimatePresence>

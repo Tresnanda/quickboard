@@ -43,6 +43,7 @@ assert.equal(labelForClipValue("https://www.example.com/path"), "example.com");
 assert.equal(clipPreview(textClip("first\nsecond")), "first second");
 assert.equal(clipMatches(textClip("first\nsecond"), "first second"), true);
 assert.equal(clipMatches(textClip("first\nsecond"), "second third"), false);
+assert.equal(clipMatches({ ...textClip("from browser"), sourceApp: "Safari" }, "safari"), true);
 
 addClip({ kind: "text", label: "Repeat", value: "repeat" });
 addClip({ kind: "text", label: "Repeat", value: "repeat" });

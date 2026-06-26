@@ -12,6 +12,7 @@ export type ClipEntry = {
   thumb?: string; // kind "image" — small data-url preview
   label: string;
   isUrl?: boolean;
+  sourceApp?: string;
   ts: number; // captured-at (unix seconds)
 };
 
@@ -71,7 +72,7 @@ export function clipPreview(clip: ClipEntry): string {
 export function clipMatches(clip: ClipEntry, query: string): boolean {
   const q = compact(query).toLowerCase();
   if (!q) return true;
-  return [clip.label, clip.value ?? "", clip.isUrl ? "link" : "", clip.kind].some((v) => compact(v).toLowerCase().includes(q));
+  return [clip.label, clip.value ?? "", clip.sourceApp ?? "", clip.isUrl ? "link" : "", clip.kind].some((v) => compact(v).toLowerCase().includes(q));
 }
 
 export function filterClips(clips: ClipEntry[], query: string): ClipEntry[] {
@@ -86,7 +87,7 @@ export function getClipboard(): ClipEntry[] {
 export function addClip(entry: Omit<ClipEntry, "id" | "ts">): void {
   const cur = read();
   const head = cur[0];
-  if (head && head.kind === entry.kind && (head.value ?? "") === (entry.value ?? "") && head.label === entry.label) return;
+  if (head && head.kind === entry.kind && (head.value ?? "") === (entry.value ?? "") && head.label === entry.label && (head.sourceApp ?? "") === (entry.sourceApp ?? "")) return;
   write([{ ...entry, label: entry.label || labelForClipValue(entry.value ?? ""), id: uid(), ts: Math.floor(Date.now() / 1000) }, ...cur].slice(0, CLIPBOARD_CAP));
 }
 

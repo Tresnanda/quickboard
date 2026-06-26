@@ -1199,6 +1199,7 @@ function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; f
   const Icon = clip.kind === "image" ? ImageIcon : clip.isUrl ? Link2 : StickyNote;
   const canDrag = clip.kind === "text";
   const preview = clipPreview(clip);
+  const source = clip.sourceApp?.trim();
   return (
     <motion.div
       layout
@@ -1227,8 +1228,8 @@ function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; f
       </span>
       <span className="relative z-10 min-w-0 flex-1">
         <span className="block truncate text-[12.5px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{clip.label}</span>
-        <span className="block truncate text-[10.5px] text-[var(--faint)]">{preview && preview !== clip.label ? preview : relativeTime(clip.ts)}</span>
-        {preview && preview !== clip.label && <span className="block truncate text-[10px] text-[var(--fainter)] tabular">{relativeTime(clip.ts)}</span>}
+        <span className="block truncate text-[10.5px] text-[var(--faint)]">{preview && preview !== clip.label ? preview : source ? `From ${source}` : relativeTime(clip.ts)}</span>
+        {preview && preview !== clip.label && <span className="block truncate text-[10px] text-[var(--fainter)] tabular">{source ? `${source} · ${relativeTime(clip.ts)}` : relativeTime(clip.ts)}</span>}
       </span>
       <div className="relative z-10 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
         {clip.kind === "text" && (
