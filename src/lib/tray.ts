@@ -76,6 +76,11 @@ export function clearTray(): void {
   writeLanes([]); // empty tray → drop the (now pointless) lane structure too
 }
 
+export function restoreTray(entries: TrayEntry[], laneNames?: string[]): void {
+  write(entries);
+  if (laneNames) writeLanes(laneNames);
+}
+
 /** Move a set of entries into a lane (undefined = back to Unsorted). */
 export function moveToLane(ids: Iterable<string>, lane: string | undefined): void {
   const idSet = ids instanceof Set ? ids : new Set(ids);

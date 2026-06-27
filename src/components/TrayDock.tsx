@@ -7,7 +7,7 @@ import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft
 import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
-import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, useLanes, useTray, type TrayEntry } from "../lib/tray";
+import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
@@ -137,6 +137,12 @@ export function TrayDock() {
     const next = { message, ...action };
     setNotice(next);
     window.setTimeout(() => setNotice((c) => (c === next ? null : c)), 3200);
+  }
+  function restoreShelf(entries: TrayEntry[], laneNames = lanes, lane = activeLane) {
+    restoreTray(entries, laneNames);
+    setActiveLane(lane);
+    setSelected(new Set());
+    flashNotice("Restored");
   }
 
   // Animate the panel out, then hide the window — so the next open starts from the
@@ -368,6 +374,8 @@ export function TrayDock() {
   }
 
   function remove(id: string) {
+    const prevTray = tray;
+    const prevLanes = lanes;
     removeFromTray(id);
     setSelected((prev) => {
       if (!prev.has(id)) return prev;
@@ -375,15 +383,38 @@ export function TrayDock() {
       next.delete(id);
       return next;
     });
+    flashNotice("Removed", { actionLabel: "Undo", onAction: () => restoreShelf(prevTray, prevLanes) });
   }
 
-  function moveShelfEntries(triggerId: string, lane: string | undefined) {
-    const ids = selected.has(triggerId) && selCount > 0 ? selected : new Set([triggerId]);
-    moveToLane(ids, lane);
+  function moveShelfIds(ids: Iterable<string>, lane: string | undefined) {
+    const idSet = ids instanceof Set ? ids : new Set(ids);
+    const previous = tray.filter((e) => idSet.has(e.id)).map((e) => ({ id: e.id, lane: e.lane }));
+    if (!previous.length) return;
+    moveToLane(idSet, lane);
     setDraggingShelfId(null);
     setSelected(new Set());
     sfx.move();
-    flashNotice(lane ? `Moved to ${lane}` : "Moved to Unsorted");
+    flashNotice(lane ? `Moved to ${lane}` : "Moved to Unsorted", {
+      actionLabel: "Undo",
+      onAction: () => {
+        previous.forEach((e) => moveToLane([e.id], e.lane));
+        flashNotice("Restored");
+      },
+    });
+  }
+
+  function moveShelfEntries(triggerId: string, lane: string | undefined) {
+    moveShelfIds(selected.has(triggerId) && selCount > 0 ? selected : [triggerId], lane);
+  }
+
+  function clearShelf() {
+    const prevTray = tray;
+    const prevLanes = lanes;
+    const prevLane = activeLane;
+    clearTray();
+    setSelected(new Set());
+    chooseLane(null);
+    flashNotice(`${prevTray.length} item${prevTray.length === 1 ? "" : "s"} cleared`, { actionLabel: "Undo", onAction: () => restoreShelf(prevTray, prevLanes, prevLane) });
   }
 
   function beginShelfDrag(id: string) {
@@ -729,8 +760,7 @@ export function TrayDock() {
                 <MoveMenu
                   lanes={lanes}
                   onMove={(lane) => {
-                    moveToLane(selected, lane);
-                    setSelected(new Set());
+                    moveShelfIds(selected, lane);
                   }}
                 />
               )}
@@ -742,7 +772,7 @@ export function TrayDock() {
               {tab === "clipboard" && clips.length > 0 ? (
                 <ClearClipsMenu onClear={clearClipRange} />
               ) : tab === "shelf" ? (
-                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => { clearTray(); setSelected(new Set()); chooseLane(null); }} className="ml-auto flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
+                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={clearShelf} className="ml-auto flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
                   <Trash2 size={13} /> Clear
                 </motion.button>
               ) : null}
