@@ -8,7 +8,7 @@ import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathOut, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
-import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, suppressClipboardCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
 import { relativeTime } from "./ItemCard";
@@ -301,6 +301,7 @@ export function TrayDock() {
     sfx.paste();
     try {
       const value = entry.kind === "text" ? entry.value ?? "" : await getTextValue(entry.itemId ?? "");
+      suppressClipboardCapture(value);
       await navigator.clipboard.writeText(value);
       await invoke("tray_paste");
       setFlashId(entry.id);
@@ -419,7 +420,9 @@ export function TrayDock() {
     setBusy(true);
     sfx.paste();
     try {
-      await navigator.clipboard.writeText(clip.value ?? "");
+      const value = clip.value ?? "";
+      suppressClipboardCapture(value);
+      await navigator.clipboard.writeText(value);
       await invoke("tray_paste");
       setFlashId(clip.id);
       window.setTimeout(() => setFlashId((c) => (c === clip.id ? null : c)), 950);

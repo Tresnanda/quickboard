@@ -17,7 +17,9 @@ export type ClipEntry = {
 };
 
 const KEY = "qb_clipboard_v1";
+const SUPPRESS_KEY = "qb_clipboard_suppress_v1";
 export const CLIPBOARD_CAP = 100; // rolling buffer — oldest fall off
+const SUPPRESS_TTL_MS = 5000;
 
 let cache: ClipEntry[] | null = null;
 const listeners = new Set<() => void>();
@@ -43,6 +45,26 @@ function write(next: ClipEntry[]): void {
     /* ignore */
   }
   listeners.forEach((l) => l());
+}
+
+type SuppressedClip = { value: string; ts: number };
+
+function readSuppressions(now = Date.now()): SuppressedClip[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SUPPRESS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is SuppressedClip => typeof e?.value === "string" && typeof e?.ts === "number" && now - e.ts < SUPPRESS_TTL_MS);
+  } catch {
+    return [];
+  }
+}
+
+function writeSuppressions(next: SuppressedClip[]): void {
+  try {
+    localStorage.setItem(SUPPRESS_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
 }
 
 function uid(): string {
@@ -81,6 +103,24 @@ export function filterClips(clips: ClipEntry[], query: string): ClipEntry[] {
 
 export function getClipboard(): ClipEntry[] {
   return read();
+}
+
+export function suppressClipboardCapture(value: string): void {
+  if (!value) return;
+  const now = Date.now();
+  writeSuppressions([{ value, ts: now }, ...readSuppressions(now).filter((e) => e.value !== value)].slice(0, 10));
+}
+
+export function shouldSuppressClipboardCapture(value: string): boolean {
+  const cur = readSuppressions();
+  const idx = cur.findIndex((e) => e.value === value);
+  if (idx === -1) {
+    writeSuppressions(cur);
+    return false;
+  }
+  cur.splice(idx, 1);
+  writeSuppressions(cur);
+  return true;
 }
 
 /** Push a fresh copy to the front, de-duping an immediate repeat, capping the buffer. */

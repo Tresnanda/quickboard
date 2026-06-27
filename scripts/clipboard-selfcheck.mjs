@@ -26,6 +26,8 @@ const {
   getClipboard,
   labelForClipValue,
   restoreClips,
+  shouldSuppressClipboardCapture,
+  suppressClipboardCapture,
 } = await import("../src/lib/clipboard.ts");
 
 function textClip(value, label = value) {
@@ -46,6 +48,10 @@ assert.equal(clipPreview(textClip("first\nsecond")), "first second");
 assert.equal(clipMatches(textClip("first\nsecond"), "first second"), true);
 assert.equal(clipMatches(textClip("first\nsecond"), "second third"), false);
 assert.equal(clipMatches({ ...textClip("from browser"), sourceApp: "Safari" }, "safari"), true);
+
+suppressClipboardCapture("internal paste");
+assert.equal(shouldSuppressClipboardCapture("internal paste"), true);
+assert.equal(shouldSuppressClipboardCapture("internal paste"), false);
 
 addClip({ kind: "text", label: "Repeat", value: "repeat" });
 addClip({ kind: "text", label: "Repeat", value: "repeat" });

@@ -7,7 +7,7 @@ import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Link2, Plu
 import { useItems } from "../lib/items-store";
 import { addFile, addText, getImageDataUrl, getTextValue } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
-import { clipPreview, filterClips, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clipPreview, filterClips, suppressClipboardCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
 import { getAppearance, setAppearance } from "../lib/appearance";
@@ -186,7 +186,9 @@ export function SummonPanel() {
     setBusy(true);
     sfx.paste();
     try {
-      await navigator.clipboard.writeText(clip.value ?? "");
+      const value = clip.value ?? "";
+      suppressClipboardCapture(value);
+      await navigator.clipboard.writeText(value);
       await invoke("summon_paste");
     } catch {
       await invoke("summon_hide");
@@ -213,6 +215,7 @@ export function SummonPanel() {
     sfx.paste();
     try {
       const value = await getTextValue(it.id);
+      suppressClipboardCapture(value);
       await navigator.clipboard.writeText(value);
       await invoke("summon_paste");
     } catch {
