@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
@@ -79,6 +79,7 @@ export function TrayDock() {
   const [dropping, setDropping] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [activeLane, setActiveLane] = useState<string | null>(null); // null=All, ""=Unsorted, else a lane
+  const [draggingShelfId, setDraggingShelfId] = useState<string | null>(null);
   const [clipQuery, setClipQuery] = useState("");
   const [clipType, setClipType] = useState<"all" | "links" | "text">("all");
   const [clipSource, setClipSource] = useState<string | null>(null);
@@ -371,6 +372,20 @@ export function TrayDock() {
     });
   }
 
+  function moveShelfEntries(triggerId: string, lane: string | undefined) {
+    const ids = selected.has(triggerId) && selCount > 0 ? selected : new Set([triggerId]);
+    moveToLane(ids, lane);
+    setDraggingShelfId(null);
+    setSelected(new Set());
+    sfx.move();
+    flashNotice(lane ? `Moved to ${lane}` : "Moved to Unsorted");
+  }
+
+  function beginShelfDrag(id: string) {
+    setDraggingShelfId(id);
+    window.setTimeout(() => setDraggingShelfId((c) => (c === id ? null : c)), 15000);
+  }
+
 
   async function pasteClip(clip: ClipEntry) {
     if (busy || clip.kind === "image") return; // image paste lands with the capture step
@@ -547,6 +562,10 @@ export function TrayDock() {
               }}
               onRename={renameLaneTo}
               onDelete={deleteLane}
+              dropActive={!!draggingShelfId}
+              onDropEntry={(lane) => {
+                if (draggingShelfId) moveShelfEntries(draggingShelfId, lane);
+              }}
             />
           </motion.div>
         )}
@@ -652,9 +671,13 @@ export function TrayDock() {
                         fileLike={fileLikeOf(e)}
                         confidential={confidentialOf(e)}
                         onSelect={() => toggleSelect(e.id)}
-                        onDrag={() => void dragOut(e)}
+                        onDrag={() => {
+                          beginShelfDrag(e.id);
+                          void dragOut(e);
+                        }}
                         onPaste={() => void paste(e)}
                         onRemove={() => remove(e.id)}
+                        moveSelect={lanes.length > 0 ? <LaneMoveSelect lanes={lanes} onMove={(lane) => moveShelfEntries(e.id, lane)} /> : undefined}
                       />
                     ))}
                   </AnimatePresence>
@@ -752,6 +775,7 @@ function TrayRow({
   onDrag,
   onPaste,
   onRemove,
+  moveSelect,
 }: {
   entry: TrayEntry;
   item?: Item;
@@ -764,6 +788,7 @@ function TrayRow({
   onDrag: () => void;
   onPaste: () => void;
   onRemove?: () => void;
+  moveSelect?: ReactNode;
 }) {
   // real thumbnails so a pile of refs / saved images is scannable — staged image
   // files read off disk, saved board images decrypt through the store.
@@ -792,9 +817,9 @@ function TrayRow({
   const meta = entry.kind === "item" ? "item" : entry.kind === "file" ? "file" : entry.isUrl ? "link" : "note";
   const canPaste = !fileLike; // text / notes / links can paste; files can't
   const draggable = !confidential; // never drag a secret out
-  const showCheck = selected || anySelected;
+  const showCheck = selected || anySelected || !!moveSelect;
   const cursor = canPaste ? "cursor-pointer" : draggable ? "cursor-grab active:cursor-grabbing" : "cursor-default";
-  const hint = canPaste ? "click to paste" : draggable ? "drag out" : "open in app";
+  const hint = moveSelect ? (canPaste ? "Click to paste, drag out, or move to a lane" : "Drag out or move to a lane") : canPaste ? "click to paste" : draggable ? "drag out" : "open in app";
 
   return (
     <motion.div
@@ -870,7 +895,8 @@ function TrayRow({
               <Check size={11} strokeWidth={3} />
             </motion.span>
           ) : (
-            <motion.span key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+            <motion.span key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={cn("flex items-center gap-0.5 transition-opacity", moveSelect ? "opacity-100" : "opacity-0 group-hover/row:opacity-100")}>
+              {moveSelect}
               {canPaste && (
                 <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
                   <CornerDownLeft size={12} />
@@ -914,6 +940,8 @@ function LaneBar({
   onCreate,
   onRename,
   onDelete,
+  dropActive = false,
+  onDropEntry,
 }: {
   lanes: string[];
   tray: TrayEntry[];
@@ -922,6 +950,8 @@ function LaneBar({
   onCreate: (name: string) => void;
   onRename: (oldName: string, newName: string) => void;
   onDelete: (name: string) => void;
+  dropActive?: boolean;
+  onDropEntry?: (lane: string | undefined) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null); // lane being renamed; "" = creating
   const [draft, setDraft] = useState("");
@@ -957,10 +987,12 @@ function LaneBar({
             onClick={() => onChoose(l)}
             onRename={() => { setEditing(l); setDraft(l); }}
             onDelete={() => onDelete(l)}
+            dropActive={dropActive}
+            onDropEntry={() => onDropEntry?.(l)}
           />
         ),
       )}
-      {unsorted > 0 && <LaneChip label="Unsorted" icon={Inbox} count={unsorted} active={active === ""} onClick={() => onChoose("")} />}
+      {unsorted > 0 && <LaneChip label="Unsorted" icon={Inbox} count={unsorted} active={active === ""} onClick={() => onChoose("")} dropActive={dropActive} onDropEntry={() => onDropEntry?.(undefined)} />}
       {editing === "" ? (
         <LaneInput value={draft} onChange={setDraft} onCommit={commit} onCancel={cancel} placeholder="New lane" />
       ) : (
@@ -980,6 +1012,8 @@ function LaneChip({
   onClick,
   onRename,
   onDelete,
+  dropActive = false,
+  onDropEntry,
 }: {
   label: string;
   count: number;
@@ -988,6 +1022,8 @@ function LaneChip({
   onClick: () => void;
   onRename?: () => void;
   onDelete?: () => void;
+  dropActive?: boolean;
+  onDropEntry?: () => void;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const dotsRef = useRef<HTMLButtonElement>(null);
@@ -1011,17 +1047,33 @@ function LaneChip({
       <span className={cn("tabular", active ? "text-white/55" : "text-[var(--faint)]")}>{count}</span>
     </>
   );
+  const dropProps = onDropEntry
+    ? {
+        onDragOver: (e: ReactDragEvent) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        },
+        onDrop: (e: ReactDragEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDropEntry();
+        },
+      }
+    : {};
 
   if (!manageable) {
     return (
       <motion.button
         type="button"
+        title={onDropEntry ? `Drop to ${label}` : undefined}
         onClick={onClick}
+        {...dropProps}
         whileTap={{ scale: 0.93 }}
         transition={{ type: "spring", stiffness: 600, damping: 26 }}
         className={cn(
           "relative flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
           active ? "text-white" : "bg-black/[0.05] text-[var(--muted)] hover:bg-black/[0.08]",
+          dropActive && onDropEntry && "ring-1 ring-[var(--ink)]/35",
         )}
       >
         {active && <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />}
@@ -1031,7 +1083,7 @@ function LaneChip({
   }
 
   return (
-    <div className="relative flex shrink-0 items-center rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white">
+    <div {...dropProps} title={onDropEntry ? `Drop to ${label}` : undefined} className={cn("relative flex shrink-0 items-center rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white", dropActive && onDropEntry && "ring-1 ring-[var(--ink)]/35")}>
       <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />
       <button type="button" onClick={onClick} className="relative z-10 flex items-center gap-1">
         {body}
@@ -1142,6 +1194,30 @@ function MoveMenu({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | 
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function LaneMoveSelect({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | undefined) => void }) {
+  return (
+    <select
+      aria-label="Move to lane"
+      value=""
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+        const value = e.target.value;
+        if (!value) return;
+        onMove(value === "__unsorted" ? undefined : value);
+      }}
+      className="h-6 max-w-[78px] shrink-0 cursor-pointer rounded-[7px] border-0 bg-black/[0.05] px-1.5 text-[10.5px] font-semibold text-[var(--muted)] outline-none transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)]"
+    >
+      <option value="">Move</option>
+      {lanes.map((lane) => (
+        <option key={lane} value={lane}>{lane}</option>
+      ))}
+      <option value="__unsorted">Unsorted</option>
+    </select>
   );
 }
 
