@@ -561,10 +561,21 @@ pub fn hide_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Paste the (already-copied) value at the cursor. Reactivating mirrors Summon:
-/// button clicks can still make AppKit point key input at the panel.
+/// Put the value on the pasteboard, then paste it at the cursor. Browser clipboard
+/// writes can fail from the non-key tray panel, so this path stays native.
 #[tauri::command]
-pub fn tray_paste() -> Result<(), String> {
+pub fn tray_paste(value: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+        use objc2_foundation::NSString;
+        let pb = NSPasteboard::generalPasteboard();
+        pb.clearContents();
+        let string_type = unsafe { NSPasteboardTypeString };
+        if !pb.setString_forType(&NSString::from_str(&value), string_type) {
+            return Err("failed to write pasteboard".to_string());
+        }
+    }
     crate::summon::reactivate_prev();
     std::thread::sleep(std::time::Duration::from_millis(140));
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};

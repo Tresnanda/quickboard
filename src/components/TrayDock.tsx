@@ -302,8 +302,7 @@ export function TrayDock() {
     try {
       const value = entry.kind === "text" ? entry.value ?? "" : await getTextValue(entry.itemId ?? "");
       suppressClipboardCapture(value);
-      await navigator.clipboard.writeText(value);
-      await invoke("tray_paste");
+      await invoke("tray_paste", { value });
       setFlashId(entry.id);
       window.setTimeout(() => setFlashId((c) => (c === entry.id ? null : c)), 950);
     } catch {
@@ -422,8 +421,7 @@ export function TrayDock() {
     try {
       const value = clip.value ?? "";
       suppressClipboardCapture(value);
-      await navigator.clipboard.writeText(value);
-      await invoke("tray_paste");
+      await invoke("tray_paste", { value });
       setFlashId(clip.id);
       window.setTimeout(() => setFlashId((c) => (c === clip.id ? null : c)), 950);
     } catch {

@@ -15,6 +15,9 @@ assert.match(source, /aria-label="Paste at cursor"[\s\S]*?onPaste\(\)/, "Text pa
 assert.equal(/dataTransfer\.setData\("text\/plain", entry\.label\)/.test(source), false, "Lane drag should not leak labels as external plain-text drops");
 assert.match(commands, /pub fn show_tray[\s\S]*capture_frontmost\(\)/, "Tray show should capture the app that owns paste focus");
 assert.match(commands, /pub fn tray_paste[\s\S]*reactivate_prev\(\)/, "Tray paste should reactivate the captured app before Cmd+V");
+assert.match(commands, /pub fn tray_paste\(value: String\)/, "Tray paste should receive the text value natively");
+assert.match(commands, /setString_forType\(&NSString::from_str\(&value\)/, "Tray paste should write the macOS pasteboard natively");
+assert.match(source, /invoke\("tray_paste", \{ value \}\)/, "Tray paste should not depend on browser clipboard focus");
 assert.equal(/>\s*Move\s*<ChevronDown/.test(laneMoveSelect), false, "Row move control should be compact, not a text pill");
 
 console.log("tray ui selfcheck passed");
