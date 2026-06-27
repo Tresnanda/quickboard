@@ -163,23 +163,86 @@ pub async fn file_to_temp(store: State<'_, Mutex<Store>>, app: tauri::AppHandle,
 /// clipboard) at the user's cursor in whatever app they were in. Auto-paste needs
 /// macOS Accessibility permission; the value is on the clipboard regardless, so ⌘V
 /// works as a fallback if the key-synthesis is blocked.
+#[cfg(target_os = "macos")]
+const MACOS_ANSI_V_KEYCODE: u16 = 0x09;
+
+fn paste_at_cursor(app: &tauri::AppHandle) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            crate::summon::reactivate_prev();
+            std::thread::sleep(std::time::Duration::from_millis(140));
+
+            use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+            let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+            enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
+            let paste_result = enigo.raw(MACOS_ANSI_V_KEYCODE, Direction::Click).map_err(|e| e.to_string());
+            let release_result = enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string());
+            paste_result?;
+            release_result?;
+            Ok(())
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn summon_paste(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("summon") {
         let _ = win.hide();
     }
-    // Re-activate the app the user was in (and its text field) so the paste lands there.
-    crate::summon::reactivate_prev();
-    std::thread::sleep(std::time::Duration::from_millis(140));
-    {
-        use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-        let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-        enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
-        enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-        enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
+    paste_at_cursor(&app)
+}
+
+#[tauri::command]
+pub async fn summon_paste_image(store: State<'_, Mutex<Store>>, app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let confidential = { store.lock().unwrap().is_confidential(&id)? };
+    if confidential {
+        require_biometric().await?;
     }
-    Ok(())
+    let (_filename, mime, bytes) = { store.lock().unwrap().read_file(&id)? };
+    if !mime.starts_with("image/") {
+        return Err("item is not an image".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            use objc2::AnyThread;
+            use objc2_app_kit::{NSImage, NSPasteboard, NSPasteboardTypeTIFF};
+            use objc2_foundation::NSData;
+
+            let result = (|| {
+                let data = NSData::from_vec(bytes);
+                let image = NSImage::initWithData(NSImage::alloc(), &data)
+                    .ok_or_else(|| "failed to decode image".to_string())?;
+                let tiff = image.TIFFRepresentation()
+                    .ok_or_else(|| "failed to encode image for pasteboard".to_string())?;
+                let pb = NSPasteboard::generalPasteboard();
+                pb.clearContents();
+                let tiff_type = unsafe { NSPasteboardTypeTIFF };
+                if !pb.setData_forType(Some(&tiff), tiff_type) {
+                    return Err("failed to write pasteboard".to_string());
+                }
+                Ok(())
+            })();
+            let _ = tx.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+        rx.recv().map_err(|e| e.to_string())??;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bytes;
+        return Err("image paste is only supported on macOS".to_string());
+    }
+
+    summon_paste(app)
 }
 
 /// Dismiss the panel without pasting (Esc / blur).
@@ -564,7 +627,7 @@ pub fn hide_tray(app: tauri::AppHandle) -> Result<(), String> {
 /// Put the value on the pasteboard, then paste it at the cursor. Browser clipboard
 /// writes can fail from the non-key tray panel, so this path stays native.
 #[tauri::command]
-pub fn tray_paste(value: String) -> Result<(), String> {
+pub fn tray_paste(app: tauri::AppHandle, value: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
@@ -576,14 +639,7 @@ pub fn tray_paste(value: String) -> Result<(), String> {
             return Err("failed to write pasteboard".to_string());
         }
     }
-    crate::summon::reactivate_prev();
-    std::thread::sleep(std::time::Duration::from_millis(140));
-    use enigo::{Direction, Enigo, Key, Keyboard, Settings};
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-    enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;
-    enigo.key(Key::Unicode('v'), Direction::Click).map_err(|e| e.to_string())?;
-    enigo.key(Key::Meta, Direction::Release).map_err(|e| e.to_string())?;
-    Ok(())
+    paste_at_cursor(&app)
 }
 
 /// Whether quickboard has macOS Accessibility permission — required for the

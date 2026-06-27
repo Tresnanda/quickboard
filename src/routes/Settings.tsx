@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Sparkles, ShieldCheck, ClipboardCopy, Trash2, Check } from "lucide-react";
+import { ShieldCheck, ClipboardCopy, Trash2, Check } from "lucide-react";
 import { SlotText } from "slot-text/react";
 import { useItems } from "../lib/items-store";
 import { useSettings, setSetting, type Density } from "../lib/settings";
@@ -197,7 +197,7 @@ export function Settings() {
         <Section title="About">
           <Row label="Onboarding" hint="Run the first-launch flow again.">
             <button type="button" onClick={() => window.dispatchEvent(new Event("qb:replay-onboarding"))} className="qb-press qb-shine flex h-[32px] items-center gap-1.5 rounded-[9px] border border-[var(--border)] bg-white px-3 text-[12px] font-semibold text-[var(--ink)]">
-              <Sparkles size={14} className="text-[#c39a31]" /> Replay
+              Replay
             </button>
           </Row>
         </Section>

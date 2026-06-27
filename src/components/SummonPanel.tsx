@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Link2, Plus, Search, StickyNote } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { addFile, addText, getImageDataUrl, getTextValue } from "../lib/ipc";
+import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
 import { clipPreview, filterClips, suppressClipboardCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
@@ -118,6 +118,19 @@ export function SummonPanel() {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [items, scopeEnv]);
 
+  useEffect(() => {
+    if (!scopeEnv || environments.includes(scopeEnv)) return;
+    setScopeEnv(null);
+    setScopeCat(null);
+    setIdx(0);
+  }, [environments, scopeEnv]);
+
+  useEffect(() => {
+    if (!scopeCat || categories.includes(scopeCat)) return;
+    setScopeCat(null);
+    setIdx(0);
+  }, [categories, scopeCat]);
+
   const boardResults = useMemo(() => {
     const s = q.trim().toLowerCase();
     const list = s
@@ -204,6 +217,21 @@ export function SummonPanel() {
     }
     const it = result.item;
     if (it.kind === "File") {
+      if (contentType(it) === "image") {
+        setBusy(true);
+        sfx.paste();
+        try {
+          await summonPasteImage(it.id);
+        } catch {
+          addToTray({ kind: "item", itemId: it.id, label: it.label });
+          void invoke("show_tray");
+          sfx.move();
+          showFlash("Added to tray");
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
       // can't paste a file as text — stage it to the tray to drag out
       addToTray({ kind: "item", itemId: it.id, label: it.label });
       void invoke("show_tray");
