@@ -845,6 +845,7 @@ function TrayRow({
           <motion.img
             src={thumb}
             alt=""
+            draggable={false}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.25, ease: EASE }}
@@ -1357,7 +1358,7 @@ function ClipRow({
         {flash && <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: [0, 1, 0], scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.9 }} className="pointer-events-none absolute inset-0 rounded-[11px] bg-[#5fae84]/14 ring-1 ring-inset ring-[#5fae84]/45" />}
       </AnimatePresence>
       <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[7px] ring-1 ring-inset ring-black/[0.04]" style={{ color: TINTS.sky.tileInk }}>
-        {clip.kind === "image" && clip.thumb ? <img src={clip.thumb} alt="" className="h-full w-full object-cover" /> : <Icon size={16} strokeWidth={1.9} />}
+        {clip.kind === "image" && clip.thumb ? <img src={clip.thumb} alt="" draggable={false} className="h-full w-full object-cover" /> : <Icon size={16} strokeWidth={1.9} />}
       </span>
       <span className="relative z-10 min-w-0 flex-1">
         <span className="block truncate text-[12.5px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{clip.label}</span>
