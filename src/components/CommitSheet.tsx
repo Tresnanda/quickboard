@@ -3,7 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, FileText, Image as ImageIcon, Layers, Link as LinkIcon, Plus, StickyNote, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { committable, removeFromTray, useTray, type TrayEntry } from "../lib/tray";
+import { committable, isTrayImageFile, removeFromTray, useTray, type TrayEntry } from "../lib/tray";
 import { Combobox } from "./Combobox";
 import { addFile, addText, readImageAsDataUrl } from "../lib/ipc";
 import { setAppearance } from "../lib/appearance";
@@ -13,10 +13,8 @@ import { cn } from "../lib/utils";
 import type { ContentType } from "../lib/types";
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic|avif)$/i;
-const isImagePath = (p?: string) => !!p && IMG_RE.test(p);
-
 function detectType(e: TrayEntry): ContentType {
-  if (e.kind === "file") return isImagePath(e.path) || isImagePath(e.label) ? "image" : "file";
+  if (e.kind === "file") return isTrayImageFile(e) ? "image" : "file";
   return e.isUrl ? "link" : "note";
 }
 

@@ -7,7 +7,7 @@ import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft
 import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
-import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
+import { addLane, addToTray, clearTray, committable, isTrayImageFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
@@ -48,8 +48,6 @@ function basenameFromUrl(url: string, fallback: string): string {
     return fallback;
   }
 }
-
-const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic|avif)$/i;
 
 // Which lane filter an entry belongs to. active: null = All, "" = Unsorted, else a lane name.
 function laneMatches(e: TrayEntry, active: string | null): boolean {
@@ -199,7 +197,7 @@ export function TrayDock() {
       for (const f of files) {
         try {
           const path = await stageBlobFile(await fileToDataUrl(f), f.name || "");
-          addToTray({ kind: "file", path, label: f.name || "Image", lane: dropLane });
+          addToTray({ kind: "file", path, label: f.name || "Image", mime: f.type || undefined, lane: dropLane });
           staged++;
         } catch {
           /* skip this one */
@@ -222,7 +220,7 @@ export function TrayDock() {
         const blob = await (await fetch(imgUrl)).blob(); // CSP is null; data: + same-origin/CORS hosts work
         const name = basenameFromUrl(imgUrl, "image");
         const path = await stageBlobFile(await fileToDataUrl(blob), name);
-        addToTray({ kind: "file", path, label: name, lane: dropLane });
+        addToTray({ kind: "file", path, label: name, mime: blob.type || undefined, lane: dropLane });
         sfx.save();
         setMode("tray");
         setTab("shelf");
@@ -855,7 +853,7 @@ function TrayRow({
   // real thumbnails so a pile of refs / saved images is scannable — staged image
   // files read off disk, saved board images decrypt through the store.
   const [thumb, setThumb] = useState<string | null>(null);
-  const isFileImage = entry.kind === "file" && !!entry.path && IMG_RE.test(entry.path);
+  const isFileImage = isTrayImageFile(entry);
   const isItemImage = entry.kind === "item" && !confidential && !!item && contentType(item) === "image";
   useEffect(() => {
     let on = true;

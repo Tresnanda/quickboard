@@ -12,6 +12,7 @@ export type TrayEntry = {
   itemId?: string; // kind "item" — board item reference (value fetched on paste)
   value?: string; // kind "text" — captured content
   path?: string; // kind "file" — a dropped file staged temporarily
+  mime?: string; // kind "file" — dropped blob type when the OS/browser provides it
   isUrl?: boolean;
   lane?: string; // ad-hoc tray group (a "lane"); undefined = Unsorted
   transient?: boolean; // temporary commit-only entry; remove if commit is canceled
@@ -20,6 +21,12 @@ export type TrayEntry = {
 // entries not yet on the board (committable via the nudge / Save to board)
 export function committable(entries: TrayEntry[]): TrayEntry[] {
   return entries.filter((e) => e.kind === "text" || e.kind === "file");
+}
+
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic|heif|avif)$/i;
+
+export function isTrayImageFile(entry: Pick<TrayEntry, "kind" | "label" | "path" | "mime">): boolean {
+  return entry.kind === "file" && (!!entry.mime?.startsWith("image/") || IMG_RE.test(entry.path ?? "") || IMG_RE.test(entry.label));
 }
 
 const KEY = "qb_tray_v1";

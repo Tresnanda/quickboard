@@ -19,6 +19,10 @@ globalThis.localStorage = {
 const tray = await import("../src/lib/tray.ts");
 
 assert.equal(typeof tray.restoreTray, "function");
+assert.equal(typeof tray.isTrayImageFile, "function");
+assert.equal(tray.isTrayImageFile({ kind: "file", label: "Screenshot", path: "/tmp/qb-staged/blob", mime: "image/png" }), true);
+assert.equal(tray.isTrayImageFile({ kind: "file", label: "photo.jpeg", path: "/tmp/qb-staged/blob" }), true);
+assert.equal(tray.isTrayImageFile({ kind: "file", label: "notes.txt", path: "/tmp/qb-staged/notes.txt", mime: "text/plain" }), false);
 
 tray.clearTray();
 tray.addLane("Work");
