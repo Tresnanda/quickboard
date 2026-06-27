@@ -86,8 +86,8 @@ function setLaneDragPreview(dt: DataTransfer, label: string) {
 
 /**
  * The floating "tray" — a persistent shelf for staging, grouping, and pulling content
- * back out. Shelf rows drag into lanes; board rows and the Shelf drag-out handle pull
- * content into other apps. Non-key panel, so it never steals focus.
+ * back out. File/image rows drag out; text rows can drag into lanes. Non-key panel,
+ * so it never steals focus.
  */
 export function TrayDock() {
   const { items, environments, activeEnvironment, reload } = useItems();
@@ -883,11 +883,13 @@ function TrayRow({
   const meta = entry.kind === "item" ? "item" : entry.kind === "file" ? "file" : entry.isUrl ? "link" : "note";
   const canPaste = !fileLike; // text / notes / links can paste; files can't
   const canDragOut = !confidential; // never drag a secret out of Quickboard
-  const movesWithinTray = !!moveSelect && !!onLaneDragStart;
+  const movesWithinTray = !!moveSelect && !!onLaneDragStart && !fileLike;
   const draggable = movesWithinTray || canDragOut;
   const showCheck = selected || anySelected || !!moveSelect;
   const cursor = movesWithinTray ? "cursor-grab active:cursor-grabbing" : canPaste ? "cursor-pointer" : draggable ? "cursor-grab active:cursor-grabbing" : "cursor-default";
-  const hint = moveSelect
+  const hint = moveSelect && fileLike && canDragOut
+    ? "Drag out, or use Move to organize"
+    : moveSelect
     ? canDragOut
       ? canPaste
         ? "Click to paste, drag to a lane, or use the drag-out handle"
@@ -917,7 +919,6 @@ function TrayRow({
               if (movesWithinTray) {
                 dragEvent.dataTransfer.effectAllowed = "move";
                 dragEvent.dataTransfer.setData(TRAY_ENTRY_DRAG, entry.id);
-                dragEvent.dataTransfer.setData("text/plain", entry.label);
                 setLaneDragPreview(dragEvent.dataTransfer, entry.label);
                 onLaneDragStart();
                 return;
