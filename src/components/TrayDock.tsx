@@ -23,6 +23,7 @@ const SPRING = { type: "spring", stiffness: 520, damping: 38, mass: 0.7 } as con
 const EASE = [0.23, 1, 0.32, 1] as const; // strong ease-out for crossfades
 type TrayView = "shelf" | "clipboard" | "board";
 type Notice = { message: string; actionLabel?: string; onAction?: () => void };
+const TRAY_ENTRY_DRAG = "application/x-quickboard-tray-entry";
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,10 +58,14 @@ function laneMatches(e: TrayEntry, active: string | null): boolean {
   return e.lane === active;
 }
 
+function isTrayEntryDrag(dt: DataTransfer | null): boolean {
+  return !!dt && Array.from(dt.types).includes(TRAY_ENTRY_DRAG);
+}
+
 /**
- * The floating "tray" — a persistent shelf you drag *out* of. Click rows to select
- * (multi), drag any selected row to pull them all out (5 photos → Figma, an address
- * → a field); ↵ on hover pastes at the cursor. Non-key panel, so it never steals focus.
+ * The floating "tray" — a persistent shelf for staging, grouping, and pulling content
+ * back out. Shelf rows drag into lanes; board rows and the Shelf drag-out handle pull
+ * content into other apps. Non-key panel, so it never steals focus.
  */
 export function TrayDock() {
   const { items, environments, activeEnvironment, reload } = useItems();
@@ -214,7 +219,7 @@ export function TrayDock() {
   useEffect(() => {
     const onOver = (e: DragEvent) => {
       e.preventDefault();
-      if (!isDraggingOut()) setDropping(true);
+      if (!isDraggingOut() && !isTrayEntryDrag(e.dataTransfer)) setDropping(true);
     };
     const onLeave = (e: DragEvent) => {
       if (e.relatedTarget === null) setDropping(false); // left the window entirely
@@ -222,7 +227,7 @@ export function TrayDock() {
     const onDropEv = (e: DragEvent) => {
       e.preventDefault();
       setDropping(false);
-      if (isDraggingOut() || !e.dataTransfer) return;
+      if (isDraggingOut() || isTrayEntryDrag(e.dataTransfer) || !e.dataTransfer) return;
       void handleDrop(e.dataTransfer);
     };
     window.addEventListener("dragover", onOver, true);
@@ -671,10 +676,9 @@ export function TrayDock() {
                         fileLike={fileLikeOf(e)}
                         confidential={confidentialOf(e)}
                         onSelect={() => toggleSelect(e.id)}
-                        onDrag={() => {
-                          beginShelfDrag(e.id);
-                          void dragOut(e);
-                        }}
+                        onLaneDragStart={() => beginShelfDrag(e.id)}
+                        onLaneDragEnd={() => setDraggingShelfId((c) => (c === e.id ? null : c))}
+                        onDrag={() => void dragOut(e)}
                         onPaste={() => void paste(e)}
                         onRemove={() => remove(e.id)}
                         moveSelect={lanes.length > 0 ? <LaneMoveSelect lanes={lanes} onMove={(lane) => moveShelfEntries(e.id, lane)} /> : undefined}
@@ -773,6 +777,8 @@ function TrayRow({
   confidential,
   onSelect,
   onDrag,
+  onLaneDragStart,
+  onLaneDragEnd,
   onPaste,
   onRemove,
   moveSelect,
@@ -786,6 +792,8 @@ function TrayRow({
   confidential: boolean;
   onSelect: () => void;
   onDrag: () => void;
+  onLaneDragStart?: () => void;
+  onLaneDragEnd?: () => void;
   onPaste: () => void;
   onRemove?: () => void;
   moveSelect?: ReactNode;
@@ -816,10 +824,24 @@ function TrayRow({
   }
   const meta = entry.kind === "item" ? "item" : entry.kind === "file" ? "file" : entry.isUrl ? "link" : "note";
   const canPaste = !fileLike; // text / notes / links can paste; files can't
-  const draggable = !confidential; // never drag a secret out
+  const canDragOut = !confidential; // never drag a secret out of Quickboard
+  const movesWithinTray = !!moveSelect && !!onLaneDragStart;
+  const draggable = movesWithinTray || canDragOut;
   const showCheck = selected || anySelected || !!moveSelect;
-  const cursor = canPaste ? "cursor-pointer" : draggable ? "cursor-grab active:cursor-grabbing" : "cursor-default";
-  const hint = moveSelect ? (canPaste ? "Click to paste, drag out, or move to a lane" : "Drag out or move to a lane") : canPaste ? "click to paste" : draggable ? "drag out" : "open in app";
+  const cursor = movesWithinTray ? "cursor-grab active:cursor-grabbing" : canPaste ? "cursor-pointer" : draggable ? "cursor-grab active:cursor-grabbing" : "cursor-default";
+  const hint = moveSelect
+    ? canDragOut
+      ? canPaste
+        ? "Click to paste, drag to a lane, or use the drag-out handle"
+        : "Drag to a lane, or use the drag-out handle"
+      : canPaste
+        ? "Click to paste or drag to a lane"
+        : "Drag to a lane"
+    : canPaste
+      ? "click to paste"
+      : canDragOut
+        ? "drag out"
+        : "open in app";
 
   return (
     <motion.div
@@ -833,11 +855,20 @@ function TrayRow({
       onDragStart={
         draggable
           ? (ev) => {
+              const dragEvent = ev as unknown as ReactDragEvent<HTMLDivElement>;
+              if (movesWithinTray) {
+                dragEvent.dataTransfer.effectAllowed = "move";
+                dragEvent.dataTransfer.setData(TRAY_ENTRY_DRAG, entry.id);
+                dragEvent.dataTransfer.setData("text/plain", entry.label);
+                onLaneDragStart();
+                return;
+              }
               ev.preventDefault();
               onDrag();
             }
           : undefined
       }
+      onDragEnd={movesWithinTray ? onLaneDragEnd : undefined}
       onClick={() => canPaste && onPaste()}
       title={hint}
       className={cn(
@@ -896,6 +927,24 @@ function TrayRow({
             </motion.span>
           ) : (
             <motion.span key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={cn("flex items-center gap-0.5 transition-opacity", moveSelect ? "opacity-100" : "opacity-0 group-hover/row:opacity-100")}>
+              {moveSelect && canDragOut && (
+                <motion.button
+                  whileTap={{ scale: 0.85 }}
+                  type="button"
+                  draggable
+                  onClick={(ev) => ev.stopPropagation()}
+                  onDragStart={(ev) => {
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                    onDrag();
+                  }}
+                  aria-label="Drag out"
+                  title="Drag out"
+                  className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]"
+                >
+                  <Download size={12} />
+                </motion.button>
+              )}
               {moveSelect}
               {canPaste && (
                 <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
@@ -1047,7 +1096,8 @@ function LaneChip({
       <span className={cn("tabular", active ? "text-white/55" : "text-[var(--faint)]")}>{count}</span>
     </>
   );
-  const dropProps = onDropEntry
+  const canDropEntry = dropActive && !!onDropEntry;
+  const dropProps = canDropEntry
     ? {
         onDragOver: (e: ReactDragEvent) => {
           e.preventDefault();
@@ -1065,7 +1115,7 @@ function LaneChip({
     return (
       <motion.button
         type="button"
-        title={onDropEntry ? `Drop to ${label}` : undefined}
+        title={canDropEntry ? `Drop to ${label}` : undefined}
         onClick={onClick}
         {...dropProps}
         whileTap={{ scale: 0.93 }}
@@ -1073,7 +1123,7 @@ function LaneChip({
         className={cn(
           "relative flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
           active ? "text-white" : "bg-black/[0.05] text-[var(--muted)] hover:bg-black/[0.08]",
-          dropActive && onDropEntry && "ring-1 ring-[var(--ink)]/35",
+          canDropEntry && "ring-1 ring-[var(--ink)]/35",
         )}
       >
         {active && <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />}
@@ -1083,7 +1133,7 @@ function LaneChip({
   }
 
   return (
-    <div {...dropProps} title={onDropEntry ? `Drop to ${label}` : undefined} className={cn("relative flex shrink-0 items-center rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white", dropActive && onDropEntry && "ring-1 ring-[var(--ink)]/35")}>
+    <div {...dropProps} title={canDropEntry ? `Drop to ${label}` : undefined} className={cn("relative flex shrink-0 items-center rounded-full py-1 pl-2.5 pr-1 text-[11px] font-semibold text-white", canDropEntry && "ring-1 ring-[var(--ink)]/35")}>
       <motion.span layoutId="lane-pill" transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-full bg-[var(--ink)]" />
       <button type="button" onClick={onClick} className="relative z-10 flex items-center gap-1">
         {body}
