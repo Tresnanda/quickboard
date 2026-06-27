@@ -5,6 +5,7 @@
 // icon/color live in the appearance store under `env:${name}`.
 
 import { useSyncExternalStore } from "react";
+import { emit, listen } from "@tauri-apps/api/event";
 
 const KEY = "qb_environments_v1";
 let cache: string[] | null = null;
@@ -23,12 +24,15 @@ function read(): string[] {
 
 function write(next: string[]): void {
   cache = next;
+  let stored = false;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
+    stored = true;
   } catch {
     /* quota / unavailable — keep in-memory */
   }
   listeners.forEach((l) => l());
+  if (stored) void emit("environments:changed").catch(() => {});
 }
 
 export function getEnvironments(): string[] {
@@ -51,7 +55,20 @@ export function removeEnvironment(name: string): void {
 
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  const refresh = () => {
+    cache = null;
+    cb();
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === KEY) refresh();
+  };
+  window.addEventListener("storage", onStorage);
+  const un = listen("environments:changed", refresh);
+  return () => {
+    listeners.delete(cb);
+    window.removeEventListener("storage", onStorage);
+    void un.then((f) => f());
+  };
 }
 
 export function useEnvironments(): string[] {

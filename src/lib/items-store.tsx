@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { listCategories, listEnvironments, listItems } from "./ipc";
 import { useEnvironments } from "./environments";
 import { getSettings } from "./settings";
@@ -107,6 +108,13 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    const un = listen("board:changed", () => void reload());
+    return () => {
+      void un.then((f) => f());
+    };
   }, [reload]);
 
   const value = useMemo<ItemsState>(

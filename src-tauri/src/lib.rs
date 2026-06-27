@@ -178,6 +178,7 @@ pub fn run() {
             commands::rename_environment,
             commands::delete_environment,
             commands::summon_paste,
+            commands::summon_paste_image,
             commands::summon_hide,
             commands::set_autostart,
             commands::get_autostart,

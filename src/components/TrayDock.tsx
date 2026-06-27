@@ -99,11 +99,15 @@ export function TrayDock() {
     if (activeLane === oldName && nn) setActiveLane(nn);
   }
 
+  function preferredBoardEnv() {
+    return activeEnvironment && environments.includes(activeEnvironment) ? activeEnvironment : environments[0] ?? "";
+  }
+
   function switchMode(m: "tray" | "board") {
     setMode(m);
     setSelected(new Set());
     if (m === "board") {
-      if (!boardEnv) setBoardEnv(activeEnvironment ?? environments[0] ?? "Personal");
+      if (!boardEnv) setBoardEnv(preferredBoardEnv());
       void reload(); // pull the latest saved items from the store
     }
   }
@@ -248,6 +252,27 @@ export function TrayDock() {
     for (const i of items) if (i.environment === boardEnv) set.add(i.category);
     return Array.from(set).sort();
   }, [items, boardEnv]);
+
+  useEffect(() => {
+    if (mode !== "board") return;
+    if (!boardEnv && environments.length > 0) {
+      setBoardEnv(preferredBoardEnv());
+      return;
+    }
+    if (boardEnv && !environments.includes(boardEnv)) {
+      setBoardEnv(preferredBoardEnv());
+      setBoardCats(new Set());
+      setSelected(new Set());
+    }
+  }, [activeEnvironment, boardEnv, environments, mode]);
+
+  useEffect(() => {
+    setBoardCats((prev) => {
+      const next = new Set([...prev].filter((c) => boardCatList.includes(c)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [boardCatList]);
+
   const boardEntries = useMemo<TrayEntry[]>(
     () =>
       items
