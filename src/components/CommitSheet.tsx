@@ -142,8 +142,13 @@ export function CommitSheet() {
     }
   }
 
+  function setOpen(open: boolean) {
+    if (!open && !done) pending.filter((e) => e.transient).forEach((e) => removeFromTray(e.id));
+    setCommitOpen(open);
+  }
+
   return (
-    <Dialog.Root open={commitOpen} onOpenChange={setCommitOpen}>
+    <Dialog.Root open={commitOpen} onOpenChange={setOpen}>
       <AnimatePresence initial={false}>
         {commitOpen && (
           <Dialog.Portal forceMount>

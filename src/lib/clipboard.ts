@@ -95,6 +95,24 @@ export function removeClip(id: string): void {
   write(read().filter((e) => e.id !== id));
 }
 
+export function clearClipsSince(cutoffTs?: number): ClipEntry[] {
+  const cur = read();
+  const removed = cutoffTs === undefined ? cur : cur.filter((e) => e.ts >= cutoffTs);
+  write(cutoffTs === undefined ? [] : cur.filter((e) => e.ts < cutoffTs));
+  return removed;
+}
+
+export function restoreClips(clips: ClipEntry[]): void {
+  const cur = read();
+  const seen = new Set(cur.map((e) => e.id));
+  const restored = clips.filter((e) => {
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+  write([...restored, ...cur].sort((a, b) => b.ts - a.ts).slice(0, CLIPBOARD_CAP));
+}
+
 export function clearClipboard(): void {
   write([]);
 }

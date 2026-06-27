@@ -8,7 +8,7 @@ import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, moveToLane, removeFromTray, removeLane, renameLane, useLanes, useTray, type TrayEntry } from "../lib/tray";
-import { clearClipboard, clipPreview, filterClips, removeClip, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
 import { relativeTime } from "./ItemCard";
@@ -21,6 +21,8 @@ import type { Item } from "../lib/types";
 
 const SPRING = { type: "spring", stiffness: 520, damping: 38, mass: 0.7 } as const;
 const EASE = [0.23, 1, 0.32, 1] as const; // strong ease-out for crossfades
+type TrayView = "shelf" | "clipboard" | "board";
+type Notice = { message: string; actionLabel?: string; onAction?: () => void };
 
 function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -75,11 +77,14 @@ export function TrayDock() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
   const [dropping, setDropping] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [activeLane, setActiveLane] = useState<string | null>(null); // null=All, ""=Unsorted, else a lane
   const [clipQuery, setClipQuery] = useState("");
+  const [clipType, setClipType] = useState<"all" | "links" | "text">("all");
+  const [clipSource, setClipSource] = useState<string | null>(null);
   const activeLaneRef = useRef<string | null>(null);
   activeLaneRef.current = activeLane;
+  const activeView: TrayView = mode === "board" ? "board" : tab;
 
   // switching lanes clears the selection so counts + Save stay scoped to what's visible
   function chooseLane(l: string | null) {
@@ -104,6 +109,15 @@ export function TrayDock() {
       void reload(); // pull the latest saved items from the store
     }
   }
+  function switchView(view: TrayView) {
+    if (view === "board") {
+      switchMode("board");
+      return;
+    }
+    setMode("tray");
+    setTab(view);
+    setSelected(new Set());
+  }
   function toggleCat(c: string) {
     setBoardCats((prev) => {
       const next = new Set(prev);
@@ -113,9 +127,10 @@ export function TrayDock() {
     });
   }
 
-  function flashNotice(msg: string) {
-    setNotice(msg);
-    window.setTimeout(() => setNotice((c) => (c === msg ? null : c)), 2600);
+  function flashNotice(message: string, action?: Omit<Notice, "message">) {
+    const next = { message, ...action };
+    setNotice(next);
+    window.setTimeout(() => setNotice((c) => (c === next ? null : c)), 3200);
   }
 
   // Animate the panel out, then hide the window — so the next open starts from the
@@ -237,7 +252,15 @@ export function TrayDock() {
 
   // the active list: board entries (Board mode), or the shelf filtered to the active lane.
   const trayVisible = useMemo(() => tray.filter((e) => laneMatches(e, activeLane)), [tray, activeLane]);
-  const visibleClips = useMemo(() => filterClips(clips, clipQuery), [clips, clipQuery]);
+  const clipSources = useMemo(
+    () => Array.from(new Set(clips.map((c) => c.sourceApp?.trim()).filter((s): s is string => !!s))).sort(),
+    [clips],
+  );
+  const visibleClips = useMemo(() => {
+    const typed = clips.filter((c) => (clipType === "links" ? !!c.isUrl : clipType === "text" ? !c.isUrl : true));
+    const sourced = clipSource ? typed.filter((c) => c.sourceApp?.trim() === clipSource) : typed;
+    return filterClips(sourced, clipQuery);
+  }, [clipQuery, clipSource, clipType, clips]);
   const visible = mode === "board" ? boardEntries : trayVisible;
   const selCount = useMemo(() => visible.filter((e) => selected.has(e.id)).length, [visible, selected]);
   const allSelected = visible.length > 0 && selCount === visible.length;
@@ -365,11 +388,31 @@ export function TrayDock() {
     }
   }
 
-  function pinClip(clip: ClipEntry) {
+  function stageClip(clip: ClipEntry) {
     if (clip.kind !== "text") return;
     addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl });
     sfx.move();
-    flashNotice("Pinned to Shelf");
+    flashNotice("Staged in Shelf");
+  }
+
+  function saveClip(clip: ClipEntry) {
+    if (clip.kind !== "text") return;
+    const id = addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl, transient: true });
+    if (!id) return;
+    sfx.save();
+    void invoke("open_commit", { ids: [id], category: "" });
+  }
+
+  function clearClipRange(seconds?: number) {
+    const removed = clearClipsSince(seconds === undefined ? undefined : Math.floor(Date.now() / 1000) - seconds);
+    if (!removed.length) return;
+    flashNotice(`${removed.length} clip${removed.length === 1 ? "" : "s"} cleared`, {
+      actionLabel: "Undo",
+      onAction: () => {
+        restoreClips(removed);
+        flashNotice("Restored");
+      },
+    });
   }
 
   // Save acts on the visible lane: selected entries, or the whole lane if none
@@ -378,6 +421,7 @@ export function TrayDock() {
   const pendingEntries = committable(visible);
   const hasPending = pendingEntries.length > 0;
   const selectedPending = pendingEntries.filter((e) => selected.has(e.id));
+  const savePending = selectedPending.length > 0 ? selectedPending : pendingEntries;
   const laneCategory = typeof activeLane === "string" && activeLane !== "" ? activeLane : "";
 
   return (
@@ -407,7 +451,8 @@ export function TrayDock() {
               >
                 <Download size={22} />
               </motion.div>
-              <div className="text-[12.5px] font-bold tracking-[-0.01em] text-[var(--ink)]">Drop to stage</div>
+              <div className="text-[12.5px] font-bold tracking-[-0.01em] text-[var(--ink)]">Drop to Shelf</div>
+              <div className="text-[11px] font-medium text-[var(--faint)]">Text, files, images, or screenshots</div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -421,37 +466,26 @@ export function TrayDock() {
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               className="absolute inset-x-3 bottom-3 z-[55] flex items-center justify-center gap-2 rounded-[11px] bg-[var(--ink)] px-3 py-2 text-center text-[11.5px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)]"
             >
-              {notice}
+              <span>{notice.message}</span>
+              {notice.actionLabel && notice.onAction && (
+                <button type="button" onClick={notice.onAction} className="rounded-[7px] bg-white/12 px-2 py-1 text-[11px] font-bold text-white transition-colors hover:bg-white/18">
+                  {notice.actionLabel}
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* mode switcher — Tray (staging) | Board (saved items) — drag to move window */}
+        {/* view switcher — Shelf (staging) | Clipboard (recent copies) | Board (saved items) */}
         <div data-tauri-drag-region className="flex shrink-0 items-center gap-1.5 px-2.5 pb-1.5 pt-2.5">
           <div className="flex min-w-0 items-center gap-0.5 rounded-[10px] bg-black/[0.05] p-[3px]">
-            <TabButton seg="tray-mode" active={mode === "tray"} onClick={() => switchMode("tray")} icon={Layers} label="Tray" count={tray.length} />
-            <TabButton seg="tray-mode" active={mode === "board"} onClick={() => switchMode("board")} icon={LayoutGrid} label="Board" count={0} />
+            <TabButton seg="tray-mode" active={activeView === "shelf"} onClick={() => switchView("shelf")} icon={Layers} label="Shelf" count={tray.length} />
+            <TabButton seg="tray-mode" active={activeView === "clipboard"} onClick={() => switchView("clipboard")} icon={ClipboardList} label="Clipboard" count={clips.length} />
+            <TabButton seg="tray-mode" active={activeView === "board"} onClick={() => switchView("board")} icon={LayoutGrid} label="Board" count={0} />
           </div>
-          {mode === "board" && <EnvPicker value={boardEnv} options={environments} onChange={(e) => { setBoardEnv(e); setBoardCats(new Set()); setSelected(new Set()); }} />}
           <div className="ml-auto flex shrink-0 items-center gap-1 pl-1">
-            {mode === "tray" && (
-              <motion.button
-                whileTap={{ scale: 0.88 }}
-                type="button"
-                onClick={() => setTab(tab === "clipboard" ? "shelf" : "clipboard")}
-                aria-label="Clipboard history"
-                title="Clipboard history"
-                className={cn(
-                  "relative grid h-6 w-6 place-items-center rounded-[7px] transition-colors",
-                  tab === "clipboard" ? "bg-[var(--ink)] text-white" : "text-[var(--muted)] hover:bg-black/[0.06] hover:text-[var(--ink)]",
-                )}
-              >
-                <ClipboardList size={13.5} strokeWidth={2.2} />
-                {clips.length > 0 && tab !== "clipboard" && <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[var(--ink)] ring-2 ring-[#fbfbfa]" />}
-              </motion.button>
-            )}
             <AnimatePresence mode="popLayout">
-              {visible.length > 0 && (mode === "board" || tab === "shelf") && (
+              {visible.length > 0 && (activeView === "board" || activeView === "shelf") && (
                 <motion.button
                   key="selall"
                   initial={{ scale: 0.6, opacity: 0 }}
@@ -479,14 +513,20 @@ export function TrayDock() {
         </div>
         <div className="mx-3 h-px bg-black/[0.06]" />
 
-        {/* board mode: category chips (the environment lives up in the switcher row) */}
+        {/* board mode: environment picker and category chips */}
         {mode === "board" && (
           <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}>
             <BoardControls
               env={boardEnv}
+              envOptions={environments}
               items={items}
               cats={boardCats}
               catList={boardCatList}
+              onChangeEnv={(e) => {
+                setBoardEnv(e);
+                setBoardCats(new Set());
+                setSelected(new Set());
+              }}
               onToggleCat={toggleCat}
               onAllCats={() => setBoardCats(new Set())}
             />
@@ -521,6 +561,22 @@ export function TrayDock() {
                 placeholder="Search recent copies..."
                 className="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[var(--ink)] outline-none placeholder:text-[var(--fainter)]"
               />
+            </div>
+            <div className="mt-1 flex items-center gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+              <CatChip
+                label="All"
+                count={clips.length}
+                active={clipType === "all" && !clipSource}
+                onClick={() => {
+                  setClipType("all");
+                  setClipSource(null);
+                }}
+              />
+              <CatChip label="Links" count={clips.filter((c) => c.isUrl).length} active={clipType === "links"} onClick={() => setClipType(clipType === "links" ? "all" : "links")} />
+              <CatChip label="Text" count={clips.filter((c) => !c.isUrl).length} active={clipType === "text"} onClick={() => setClipType(clipType === "text" ? "all" : "text")} />
+              {clipSources.map((source) => (
+                <CatChip key={source} label={source} count={clips.filter((c) => c.sourceApp?.trim() === source).length} active={clipSource === source} onClick={() => setClipSource(clipSource === source ? null : source)} />
+              ))}
             </div>
           </motion.div>
         )}
@@ -581,7 +637,7 @@ export function TrayDock() {
                   <LaneEmpty
                     icon={tray.length === 0 ? Layers : Inbox}
                     title={tray.length === 0 ? "Nothing staged" : "This lane is empty"}
-                    hint={tray.length === 0 ? "Drop files or text here — or press ⇥ on an item in ⌥Space." : "Drop here to fill this lane, or move items in."}
+                    hint={tray.length === 0 ? "Drop text, files, images, or screenshots here — or press ⇥ in ⌥Space." : "Drop here to fill this lane, or move items in."}
                   />
                 ) : (
                   <AnimatePresence initial={false} mode="popLayout">
@@ -621,7 +677,7 @@ export function TrayDock() {
               ) : (
                 <AnimatePresence initial={false} mode="popLayout">
                   {visibleClips.map((c) => (
-                    <ClipRow key={c.id} clip={c} flash={flashId === c.id} onPaste={() => void pasteClip(c)} onPin={() => pinClip(c)} onRemove={() => removeClip(c.id)} />
+                    <ClipRow key={c.id} clip={c} flash={flashId === c.id} onPaste={() => void pasteClip(c)} onSave={() => saveClip(c)} onStage={() => stageClip(c)} onRemove={() => removeClip(c.id)} />
                   ))}
                 </AnimatePresence>
               )}
@@ -635,10 +691,10 @@ export function TrayDock() {
         {/* actions — Tray mode only (Board items are already saved) */}
         {mode === "tray" && (
         <AnimatePresence initial={false}>
-          {((tab === "shelf" && tray.length > 0) || (tab === "clipboard" && clips.length > 0)) && (
+          {((tab === "shelf" && tray.length > 0) || tab === "clipboard") && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.18 }} className="flex shrink-0 items-center gap-2 border-t border-black/[0.06] px-2.5 py-2">
               {tab === "shelf" && hasPending && (
-                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => void invoke("open_commit", { ids: selectedPending.map((e) => e.id), category: laneCategory })} className="flex items-center gap-1.5 rounded-[9px] bg-[var(--ink)] px-2.5 py-1.5 text-[11.5px] font-semibold text-white">
+                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => void invoke("open_commit", { ids: savePending.map((e) => e.id), category: laneCategory })} className="flex items-center gap-1.5 rounded-[9px] bg-[var(--ink)] px-2.5 py-1.5 text-[11.5px] font-semibold text-white">
                   <Check size={13} strokeWidth={2.6} /> {selectedPending.length > 0 ? `Save ${selectedPending.length} to board` : laneCategory ? "Save lane to board" : "Save all to board"}
                 </motion.button>
               )}
@@ -651,9 +707,18 @@ export function TrayDock() {
                   }}
                 />
               )}
-              <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => { if (tab === "shelf") { clearTray(); setSelected(new Set()); chooseLane(null); } else clearClipboard(); }} className="ml-auto flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
-                <Trash2 size={13} /> Clear
-              </motion.button>
+              {tab === "clipboard" && (
+                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setSetting("clipboardHistory", !clipboardOn)} className="flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
+                  {clipboardOn ? "Pause History" : "Resume History"}
+                </motion.button>
+              )}
+              {tab === "clipboard" && clips.length > 0 ? (
+                <ClearClipsMenu onClear={clearClipRange} />
+              ) : tab === "shelf" ? (
+                <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => { clearTray(); setSelected(new Set()); chooseLane(null); }} className="ml-auto flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]">
+                  <Trash2 size={13} /> Clear
+                </motion.button>
+              ) : null}
             </motion.div>
           )}
         </AnimatePresence>
@@ -825,7 +890,7 @@ function TrayRow({
 
 function TabButton({ active, onClick, icon: Icon, label, count, seg = "tray-tab" }: { active: boolean; onClick: () => void; icon: LucideIcon; label: string; count: number; seg?: string }) {
   return (
-    <button type="button" onClick={onClick} className="relative rounded-[8px] px-2 py-1">
+    <button type="button" aria-pressed={active} onClick={onClick} className="relative rounded-[8px] px-2 py-1">
       {active && <motion.span layoutId={seg} transition={{ type: "spring", stiffness: 520, damping: 36 }} className="absolute inset-0 rounded-[8px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.09),0_1px_1px_rgba(0,0,0,0.04)]" />}
       <span className={cn("relative z-10 flex items-center gap-1.5 text-[11.5px] font-semibold transition-colors", active ? "text-[var(--ink)]" : "text-[var(--muted)]")}>
         <Icon size={12.5} strokeWidth={2.2} />
@@ -1079,25 +1144,78 @@ function MoveMenu({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | 
   );
 }
 
+function ClearClipsMenu({ onClear }: { onClear: (seconds?: number) => void }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [open]);
+
+  return (
+    <div className="relative ml-auto">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className="flex items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05]"
+      >
+        <Trash2 size={13} /> Clear <ChevronDown size={11} className={cn("transition-transform", open && "rotate-180")} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.98 }}
+            transition={{ duration: 0.14 }}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-full right-0 z-[60] mb-1.5 min-w-[150px] overflow-hidden rounded-[11px] border border-black/[0.08] bg-white p-1 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.45)]"
+          >
+            <div className="px-2 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--fainter)]">Clear recent</div>
+            <button type="button" onClick={() => { onClear(15 * 60); setOpen(false); }} className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] font-semibold text-[var(--ink)] hover:bg-black/[0.05]">
+              Last 15 min
+            </button>
+            <button type="button" onClick={() => { onClear(60 * 60); setOpen(false); }} className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] font-semibold text-[var(--ink)] hover:bg-black/[0.05]">
+              Last hour
+            </button>
+            <button type="button" onClick={() => { onClear(undefined); setOpen(false); }} className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] font-semibold text-[#b4424f] hover:bg-[#b4424f]/[0.08]">
+              All clips
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // Board mode: pick the environment to pull from, then multi-select categories.
 function BoardControls({
   env,
+  envOptions,
   items,
   cats,
   catList,
+  onChangeEnv,
   onToggleCat,
   onAllCats,
 }: {
   env: string;
+  envOptions: string[];
   items: Item[];
   cats: Set<string>;
   catList: string[];
+  onChangeEnv: (env: string) => void;
   onToggleCat: (c: string) => void;
   onAllCats: () => void;
 }) {
   const envCount = items.filter((i) => i.environment === env).length;
   return (
     <div className="flex shrink-0 items-center gap-1 overflow-x-auto px-2.5 pb-1.5 pt-1 [&::-webkit-scrollbar]:hidden">
+      <EnvPicker value={env} options={envOptions} onChange={onChangeEnv} />
       <CatChip label="All" count={envCount} active={cats.size === 0} onClick={onAllCats} />
       {catList.map((c) => (
         <CatChip key={c} label={c} count={items.filter((i) => i.environment === env && i.category === c).length} active={cats.has(c)} onClick={() => onToggleCat(c)} />
@@ -1169,6 +1287,7 @@ function CatChip({ label, count, active, onClick }: { label: string; count: numb
   return (
     <motion.button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       whileTap={{ scale: 0.93 }}
       transition={{ type: "spring", stiffness: 600, damping: 26 }}
@@ -1195,7 +1314,21 @@ function LaneEmpty({ icon: Icon, title, hint }: { icon: LucideIcon; title: strin
   );
 }
 
-function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; flash: boolean; onPaste: () => void; onPin: () => void; onRemove: () => void }) {
+function ClipRow({
+  clip,
+  flash,
+  onPaste,
+  onSave,
+  onStage,
+  onRemove,
+}: {
+  clip: ClipEntry;
+  flash: boolean;
+  onPaste: () => void;
+  onSave: () => void;
+  onStage: () => void;
+  onRemove: () => void;
+}) {
   const Icon = clip.kind === "image" ? ImageIcon : clip.isUrl ? Link2 : StickyNote;
   const canDrag = clip.kind === "text";
   const preview = clipPreview(clip);
@@ -1231,18 +1364,21 @@ function ClipRow({ clip, flash, onPaste, onPin, onRemove }: { clip: ClipEntry; f
         <span className="block truncate text-[10.5px] text-[var(--faint)]">{preview && preview !== clip.label ? preview : source ? `From ${source}` : relativeTime(clip.ts)}</span>
         {preview && preview !== clip.label && <span className="block truncate text-[10px] text-[var(--fainter)] tabular">{source ? `${source} · ${relativeTime(clip.ts)}` : relativeTime(clip.ts)}</span>}
       </span>
-      <div className="relative z-10 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+      <div className="relative z-10 flex shrink-0 items-center gap-0.5">
         {clip.kind === "text" && (
           <>
-            <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
+            <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" title="Paste" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
               <CornerDownLeft size={12} />
             </motion.button>
-            <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPin(); }} aria-label="Pin to Shelf" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
+            <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onSave(); }} aria-label="Save to board" title="Save" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
               <Bookmark size={12} />
+            </motion.button>
+            <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onStage(); }} aria-label="Stage in Shelf" title="Stage" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
+              <FolderInput size={12} />
             </motion.button>
           </>
         )}
-        <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onRemove(); }} aria-label="Remove" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--faint)] hover:bg-black/[0.06] hover:text-[#b4424f]">
+        <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onRemove(); }} aria-label="Remove" title="Remove" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--faint)] hover:bg-black/[0.06] hover:text-[#b4424f]">
           <X size={12} />
         </motion.button>
       </div>

@@ -19,11 +19,13 @@ globalThis.localStorage = {
 const {
   CLIPBOARD_CAP,
   addClip,
+  clearClipsSince,
   clearClipboard,
   clipMatches,
   clipPreview,
   getClipboard,
   labelForClipValue,
+  restoreClips,
 } = await import("../src/lib/clipboard.ts");
 
 function textClip(value, label = value) {
@@ -56,5 +58,11 @@ for (let i = 0; i < CLIPBOARD_CAP + 5; i += 1) {
 assert.equal(getClipboard().length, CLIPBOARD_CAP);
 assert.equal(getClipboard()[0]?.value, `clip-${CLIPBOARD_CAP + 4}`);
 assert.equal(getClipboard().at(-1)?.value, "clip-5");
+
+const removed = clearClipsSince(Math.floor(Date.now() / 1000) - 60);
+assert.equal(removed.length, CLIPBOARD_CAP);
+assert.equal(getClipboard().length, 0);
+restoreClips(removed.slice(0, 2));
+assert.equal(getClipboard().length, 2);
 
 console.log("clipboard selfcheck passed");

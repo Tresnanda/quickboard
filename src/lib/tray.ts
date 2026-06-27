@@ -14,6 +14,7 @@ export type TrayEntry = {
   path?: string; // kind "file" — a dropped file staged temporarily
   isUrl?: boolean;
   lane?: string; // ad-hoc tray group (a "lane"); undefined = Unsorted
+  transient?: boolean; // temporary commit-only entry; remove if commit is canceled
 };
 
 // entries not yet on the board (committable via the nudge / Save to board)
@@ -57,11 +58,13 @@ export function getTray(): TrayEntry[] {
   return read();
 }
 
-export function addToTray(entry: Omit<TrayEntry, "id">): void {
+export function addToTray(entry: Omit<TrayEntry, "id">): string | null {
   const cur = read();
   // don't stage the same board item twice
-  if (entry.kind === "item" && cur.some((e) => e.itemId === entry.itemId)) return;
-  write([...cur, { ...entry, id: uid() }]);
+  if (entry.kind === "item" && cur.some((e) => e.itemId === entry.itemId)) return null;
+  const id = uid();
+  write([...cur, { ...entry, id }]);
+  return id;
 }
 
 export function removeFromTray(id: string): void {
