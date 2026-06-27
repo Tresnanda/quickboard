@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
-import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
+import { dragMixedOut, dragOutItem, dragPathOut, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
@@ -350,6 +350,10 @@ export function TrayDock() {
     if (!multi && trigger.kind === "item" && fileLikeOf(trigger) && !confidentialOf(trigger)) {
       const it = itemFor(trigger);
       await dragOutItem(trigger.itemId ?? "", it ? contentType(it) === "image" : false);
+      return;
+    }
+    if (!multi && trigger.kind === "file" && trigger.path && isTrayImageFile(trigger)) {
+      await dragPathOut(trigger.path, true);
       return;
     }
     // Never drag a secret out — exclude it and say so.

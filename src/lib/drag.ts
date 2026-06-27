@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
-import { fileToTemp, getImageDataUrl } from "./ipc";
+import { fileToTemp, getImageDataUrl, readImageAsDataUrl } from "./ipc";
 
 // A native drag (start_multi_drag) reports completion via a single "drag:end" event.
 // Only the window that started a drag has a pending finisher, so the broadcast is safe.
@@ -337,6 +337,16 @@ export async function dragPathsOut(paths: string[], onEnd?: () => void): Promise
   }
   const icon = (await multiDragPreview(paths.length)) ?? paths[0];
   await nativeDrag(paths, null, icon, null, onEnd);
+}
+
+export async function dragPathOut(path: string, isImage: boolean, onEnd?: () => void): Promise<void> {
+  let icon: string | null = null;
+  if (isImage) {
+    const src = await readImageAsDataUrl(path).catch(() => null);
+    if (src) icon = await dragPreview(src);
+  }
+  if (!icon) icon = await fileDragPreview(path.split(/[\\/]/).pop() || "file");
+  await nativeDrag([path], null, icon ?? path, null, onEnd);
 }
 
 /** Drag a text entry out as plain text (drop into a field / editor). */
