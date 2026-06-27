@@ -62,6 +62,30 @@ function isTrayEntryDrag(dt: DataTransfer | null): boolean {
   return !!dt && Array.from(dt.types).includes(TRAY_ENTRY_DRAG);
 }
 
+function setLaneDragPreview(dt: DataTransfer, label: string) {
+  const el = document.createElement("div");
+  el.textContent = `Move ${label}`;
+  el.style.cssText = [
+    "position:fixed",
+    "top:-1000px",
+    "left:-1000px",
+    "max-width:220px",
+    "overflow:hidden",
+    "text-overflow:ellipsis",
+    "white-space:nowrap",
+    "border-radius:9px",
+    "background:#15171c",
+    "color:white",
+    "padding:6px 9px",
+    "font:600 12px/1.2 system-ui,-apple-system,BlinkMacSystemFont,sans-serif",
+    "box-shadow:0 8px 24px rgba(0,0,0,0.24)",
+    "pointer-events:none",
+  ].join(";");
+  document.body.appendChild(el);
+  dt.setDragImage(el, 12, 12);
+  window.setTimeout(() => el.remove(), 0);
+}
+
 /**
  * The floating "tray" — a persistent shelf for staging, grouping, and pulling content
  * back out. Shelf rows drag into lanes; board rows and the Shelf drag-out handle pull
@@ -890,6 +914,7 @@ function TrayRow({
                 dragEvent.dataTransfer.effectAllowed = "move";
                 dragEvent.dataTransfer.setData(TRAY_ENTRY_DRAG, entry.id);
                 dragEvent.dataTransfer.setData("text/plain", entry.label);
+                setLaneDragPreview(dragEvent.dataTransfer, entry.label);
                 onLaneDragStart();
                 return;
               }
@@ -1278,26 +1303,79 @@ function MoveMenu({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | 
 }
 
 function LaneMoveSelect({ lanes, onMove }: { lanes: string[]; onMove: (lane: string | undefined) => void }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
+  function openMenu() {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    setMenu({ x: Math.max(8, Math.min(r.left, window.innerWidth - 154)), y: Math.max(8, Math.min(r.bottom + 6, window.innerHeight - 158)) });
+  }
+
+  function choose(lane: string | undefined) {
+    onMove(lane);
+    setMenu(null);
+    ref.current?.focus();
+  }
+
   return (
-    <select
-      aria-label="Move to lane"
-      value=""
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        e.stopPropagation();
-        const value = e.target.value;
-        if (!value) return;
-        onMove(value === "__unsorted" ? undefined : value);
-      }}
-      className="h-6 max-w-[78px] shrink-0 cursor-pointer rounded-[7px] border-0 bg-black/[0.05] px-1.5 text-[10.5px] font-semibold text-[var(--muted)] outline-none transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)]"
-    >
-      <option value="">Move</option>
-      {lanes.map((lane) => (
-        <option key={lane} value={lane}>{lane}</option>
-      ))}
-      <option value="__unsorted">Unsorted</option>
-    </select>
+    <>
+      <button
+        ref={ref}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={!!menu}
+        aria-label="Move to lane"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (menu) setMenu(null);
+          else openMenu();
+        }}
+        className="flex h-6 shrink-0 items-center gap-1 rounded-[7px] bg-black/[0.05] px-1.5 text-[10.5px] font-semibold text-[var(--muted)] outline-none transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)] focus-visible:ring-2 focus-visible:ring-[var(--ink)]/25"
+      >
+        Move <ChevronDown size={11} className={cn("transition-transform", menu && "rotate-180")} />
+      </button>
+      {menu &&
+        createPortal(
+          <motion.div
+            role="menu"
+            aria-label="Move to lane"
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.96, y: -3 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: -2 }}
+            transition={{ duration: 0.12, ease: EASE }}
+            style={{ position: "fixed", left: menu.x, top: menu.y, zIndex: 80, transformOrigin: "top left" }}
+            className="max-h-[150px] min-w-[146px] overflow-y-auto rounded-[11px] border border-black/[0.08] bg-white p-1 text-[var(--ink)] shadow-[0_12px_34px_-10px_rgba(0,0,0,0.5)] [&::-webkit-scrollbar]:hidden"
+          >
+            {lanes.map((lane) => (
+              <button key={lane} type="button" role="menuitem" onClick={() => choose(lane)} className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] font-semibold transition-colors hover:bg-black/[0.05] focus-visible:bg-black/[0.05] focus-visible:outline-none">
+                <Layers size={12} className="shrink-0 text-[var(--muted)]" /> <span className="truncate">{lane}</span>
+              </button>
+            ))}
+            <button type="button" role="menuitem" onClick={() => choose(undefined)} className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-left text-[12px] font-medium text-[var(--muted)] transition-colors hover:bg-black/[0.05] focus-visible:bg-black/[0.05] focus-visible:outline-none">
+              <Inbox size={12} className="shrink-0" /> Unsorted
+            </button>
+          </motion.div>,
+          document.body,
+        )}
+    </>
   );
 }
 
