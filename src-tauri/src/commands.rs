@@ -509,6 +509,7 @@ pub async fn start_multi_drag(_files: Vec<String>, _text: Option<String>, _icon:
 #[tauri::command]
 pub fn show_tray(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
+    crate::summon::capture_frontmost();
     if let Some(win) = app.get_webview_window("tray") {
         let was_visible = win.is_visible().unwrap_or(false);
         let w = win.clone();
@@ -560,11 +561,12 @@ pub fn hide_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Paste the (already-copied) value at the cursor. The tray is a non-key panel, so
-/// the app the user is in keeps focus — no hide, no re-activate, just ⌘V.
+/// Paste the (already-copied) value at the cursor. Reactivating mirrors Summon:
+/// button clicks can still make AppKit point key input at the panel.
 #[tauri::command]
 pub fn tray_paste() -> Result<(), String> {
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    crate::summon::reactivate_prev();
+    std::thread::sleep(std::time::Duration::from_millis(140));
     use enigo::{Direction, Enigo, Key, Keyboard, Settings};
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
     enigo.key(Key::Meta, Direction::Press).map_err(|e| e.to_string())?;

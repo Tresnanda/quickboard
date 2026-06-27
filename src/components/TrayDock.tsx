@@ -931,24 +931,6 @@ function TrayRow({
             </motion.span>
           ) : (
             <motion.span key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={cn("flex items-center gap-0.5 transition-opacity", moveSelect ? "opacity-100" : "opacity-0 group-hover/row:opacity-100")}>
-              {moveSelect && canDragOut && (
-                <motion.button
-                  whileTap={{ scale: 0.85 }}
-                  type="button"
-                  draggable
-                  onClick={(ev) => ev.stopPropagation()}
-                  onDragStart={(ev) => {
-                    ev.stopPropagation();
-                    ev.preventDefault();
-                    onDrag();
-                  }}
-                  aria-label="Drag out"
-                  title="Drag out"
-                  className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]"
-                >
-                  <Download size={12} />
-                </motion.button>
-              )}
               {moveSelect}
               {canPaste && (
                 <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
@@ -1268,9 +1250,11 @@ function LaneMoveSelect({ lanes, onMove }: { lanes: string[]; onMove: (lane: str
           if (menu) setMenu(null);
           else openMenu();
         }}
-        className="flex h-6 shrink-0 items-center gap-1 rounded-[7px] bg-black/[0.05] px-1.5 text-[10.5px] font-semibold text-[var(--muted)] outline-none transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)] focus-visible:ring-2 focus-visible:ring-[var(--ink)]/25"
+        title="Move to lane"
+        className="flex h-6 w-8 shrink-0 items-center justify-center gap-0.5 rounded-[7px] bg-black/[0.05] text-[var(--muted)] outline-none transition-colors hover:bg-black/[0.08] hover:text-[var(--ink)] focus-visible:ring-2 focus-visible:ring-[var(--ink)]/25"
       >
-        Move <ChevronDown size={11} className={cn("transition-transform", menu && "rotate-180")} />
+        <FolderInput size={12} />
+        <ChevronDown size={9} className={cn("transition-transform", menu && "rotate-180")} />
       </button>
       {menu &&
         createPortal(
