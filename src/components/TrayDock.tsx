@@ -7,7 +7,7 @@ import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft
 import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
-import { addLane, addToTray, clearTray, committable, isTrayImageFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
+import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
@@ -196,8 +196,9 @@ export function TrayDock() {
       let staged = 0;
       for (const f of files) {
         try {
+          const mime = f.type || undefined;
           const path = await stageBlobFile(await fileToDataUrl(f), f.name || "");
-          addToTray({ kind: "file", path, label: f.name || "Image", mime: f.type || undefined, lane: dropLane });
+          addToTray({ kind: "file", path, label: labelForTrayFile(f.name, mime), mime, lane: dropLane });
           staged++;
         } catch {
           /* skip this one */
@@ -219,8 +220,9 @@ export function TrayDock() {
       try {
         const blob = await (await fetch(imgUrl)).blob(); // CSP is null; data: + same-origin/CORS hosts work
         const name = basenameFromUrl(imgUrl, "image");
+        const mime = blob.type || undefined;
         const path = await stageBlobFile(await fileToDataUrl(blob), name);
-        addToTray({ kind: "file", path, label: name, mime: blob.type || undefined, lane: dropLane });
+        addToTray({ kind: "file", path, label: labelForTrayFile(name, mime), mime, lane: dropLane });
         sfx.save();
         setMode("tray");
         setTab("shelf");

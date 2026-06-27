@@ -24,9 +24,18 @@ export function committable(entries: TrayEntry[]): TrayEntry[] {
 }
 
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic|heif|avif)$/i;
+const FILE_EXT_RE = /\.[a-z0-9]{1,6}$/i;
 
 export function isTrayImageFile(entry: Pick<TrayEntry, "kind" | "label" | "path" | "mime">): boolean {
   return entry.kind === "file" && (!!entry.mime?.startsWith("image/") || IMG_RE.test(entry.path ?? "") || IMG_RE.test(entry.label));
+}
+
+export function labelForTrayFile(name: string | undefined, mime?: string): string {
+  const raw = (name ?? "").trim();
+  const image = !!mime?.startsWith("image/") || IMG_RE.test(raw);
+  if (!raw) return image ? "Image" : "File";
+  if (image && /^[a-f0-9]{24,}$/i.test(raw.replace(FILE_EXT_RE, ""))) return "Image";
+  return raw;
 }
 
 const KEY = "qb_tray_v1";
