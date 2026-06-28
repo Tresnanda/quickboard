@@ -423,18 +423,54 @@ pub fn start_clipboard_watch(app: tauri::AppHandle) {
             if concealed {
                 continue;
             }
+            // Prefer text; fall back to image data (screenshots, "Copy Image", etc.)
             let string_type = unsafe { NSPasteboardTypeString };
             if let Some(text) = pb.stringForType(string_type) {
                 let value = text.to_string();
                 let trimmed = value.trim();
-                if trimmed.is_empty() {
+                if !trimmed.is_empty() {
+                    let is_url = trimmed.starts_with("http://") || trimmed.starts_with("https://");
+                    let _ = app.emit("clipboard:new", serde_json::json!({ "kind": "text", "value": value, "isUrl": is_url, "sourceApp": source_app }));
                     continue;
                 }
-                let is_url = trimmed.starts_with("http://") || trimmed.starts_with("https://");
-                let _ = app.emit("clipboard:new", serde_json::json!({ "value": value, "isUrl": is_url, "sourceApp": source_app }));
+            }
+            if let Some(path) = capture_clipboard_image(&app, &pb) {
+                let _ = app.emit("clipboard:new", serde_json::json!({ "kind": "image", "path": path, "sourceApp": source_app }));
             }
         }
     });
+}
+
+/// Pull image data off the pasteboard, transcode to PNG, and stash it in a fresh
+/// temp subdir. Returns the file path the Clipboard lane references for
+/// preview/paste/stage/drag. PNG preferred; a TIFF-only pasteboard is transcoded.
+#[cfg(target_os = "macos")]
+fn capture_clipboard_image(app: &tauri::AppHandle, pb: &objc2_app_kit::NSPasteboard) -> Option<String> {
+    use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSPasteboardTypePNG, NSPasteboardTypeTIFF};
+    use objc2_foundation::NSDictionary;
+    use tauri::Manager;
+
+    let png_type = unsafe { NSPasteboardTypePNG };
+    let png_bytes: Vec<u8> = if let Some(data) = pb.dataForType(png_type) {
+        data.to_vec()
+    } else {
+        let tiff_type = unsafe { NSPasteboardTypeTIFF };
+        let tiff = pb.dataForType(tiff_type)?;
+        let rep = NSBitmapImageRep::imageRepWithData(&tiff)?;
+        let props = NSDictionary::new();
+        let png = unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props) }?;
+        png.to_vec()
+    };
+    if png_bytes.is_empty() {
+        return None;
+    }
+
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let dir = app.path().temp_dir().ok()?.join("quickboard-clip").join(format!("{stamp:x}"));
+    std::fs::create_dir_all(&dir).ok()?;
+    let p = dir.join("clip.png");
+    std::fs::write(&p, &png_bytes).ok()?;
+    Some(p.to_string_lossy().to_string())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -640,6 +676,70 @@ pub fn tray_paste(app: tauri::AppHandle, value: String) -> Result<(), String> {
         }
     }
     paste_at_cursor(&app)
+}
+
+/// Decode image bytes and write them to the general pasteboard as TIFF, on the main
+/// thread (AppKit image work). Shared by the tray + summon image-paste commands.
+#[cfg(target_os = "macos")]
+fn put_image_on_pasteboard(app: &tauri::AppHandle, bytes: Vec<u8>) -> Result<(), String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        use objc2::AnyThread;
+        use objc2_app_kit::{NSImage, NSPasteboard, NSPasteboardTypeTIFF};
+        use objc2_foundation::NSData;
+        let result = (|| {
+            let data = NSData::from_vec(bytes);
+            let image = NSImage::initWithData(NSImage::alloc(), &data).ok_or_else(|| "failed to decode image".to_string())?;
+            let tiff = image.TIFFRepresentation().ok_or_else(|| "failed to encode image for pasteboard".to_string())?;
+            let pb = NSPasteboard::generalPasteboard();
+            pb.clearContents();
+            let tiff_type = unsafe { NSPasteboardTypeTIFF };
+            if !pb.setData_forType(Some(&tiff), tiff_type) {
+                return Err("failed to write pasteboard".to_string());
+            }
+            Ok(())
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| e.to_string())?;
+    rx.recv().map_err(|e| e.to_string())?
+}
+
+/// Put a Clipboard-lane image (by temp-file path) on the pasteboard, then paste it
+/// at the cursor — the image twin of `tray_paste`.
+#[tauri::command]
+pub fn tray_paste_image(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::Manager;
+        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+        put_image_on_pasteboard(&app, bytes)?;
+        if let Some(win) = app.get_webview_window("tray") {
+            let _ = win.hide();
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        return Err("image paste is only supported on macOS".to_string());
+    }
+    paste_at_cursor(&app)
+}
+
+/// Summon-panel twin of `tray_paste_image`: write the image, then paste + dismiss.
+#[tauri::command]
+pub fn summon_paste_image_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+        put_image_on_pasteboard(&app, bytes)?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        return Err("image paste is only supported on macOS".to_string());
+    }
+    summon_paste(app)
 }
 
 /// Whether quickboard has macOS Accessibility permission — required for the

@@ -6,7 +6,8 @@ import { listen } from "@tauri-apps/api/event";
 import { Sparkles } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { useSettings } from "../lib/settings";
-import { addClip, labelForClipValue, shouldSuppressClipboardCapture } from "../lib/clipboard";
+import { addClip, labelForClipValue, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
+import { readImageAsDataUrl } from "../lib/ipc";
 import { Sidebar } from "./Sidebar";
 import { DetailModal } from "./DetailModal";
 import { NewItemSheet } from "./NewItemSheet";
@@ -17,6 +18,34 @@ import { TrayNudge } from "./TrayNudge";
 import { Onboarding } from "./Onboarding";
 import { useConfetti } from "./Confetti";
 import { useToast } from "./Toast";
+
+/** Downscale a full-res image data-url to a small preview thumbnail for the lane. */
+function makeThumb(dataUrl: string, max = 88): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        resolve(canvas.toDataURL("image/webp", 0.8));
+      } catch {
+        resolve(canvas.toDataURL("image/png"));
+      }
+    };
+    img.onerror = () => reject(new Error("thumbnail decode failed"));
+    img.src = dataUrl;
+  });
+}
 
 /**
  * The window. A warm canvas with two floating rounded cards — sidebar + main —
@@ -62,11 +91,26 @@ export function AppShell() {
     const enabled = settings.clipboardHistory;
     void invoke("set_clipboard_watch", { enabled });
     if (!enabled) return;
-    const un = listen<{ value?: string; isUrl?: boolean; sourceApp?: string | null }>("clipboard:new", (e) => {
+    const un = listen<{ kind?: string; value?: string; isUrl?: boolean; path?: string; sourceApp?: string | null }>("clipboard:new", async (e) => {
+      const sourceApp = e.payload?.sourceApp?.trim() || undefined;
+      if (e.payload?.kind === "image") {
+        const path = e.payload?.path;
+        if (!path) return;
+        // sync check before any await, so the suppress window isn't lost to a race
+        if (shouldSuppressImageCapture()) return;
+        try {
+          const full = await readImageAsDataUrl(path);
+          const thumb = await makeThumb(full);
+          addClip({ kind: "image", path, thumb, mime: "image/png", label: "Image", sourceApp });
+        } catch {
+          /* best-effort */
+        }
+        return;
+      }
       const value = e.payload?.value;
       if (!value) return;
       if (shouldSuppressClipboardCapture(value)) return;
-      addClip({ kind: "text", value, label: labelForClipValue(value), isUrl: !!e.payload?.isUrl, sourceApp: e.payload?.sourceApp?.trim() || undefined });
+      addClip({ kind: "text", value, label: labelForClipValue(value), isUrl: !!e.payload?.isUrl, sourceApp });
     });
     return () => {
       void un.then((f) => f());

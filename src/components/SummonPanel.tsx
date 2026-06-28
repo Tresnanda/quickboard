@@ -3,11 +3,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Link2, Plus, Search, StickyNote } from "lucide-react";
+import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Image as ImageIcon, Link2, Plus, Search, StickyNote } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage } from "../lib/ipc";
+import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage, summonPasteImagePath } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
-import { clipPreview, filterClips, suppressClipboardCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clipPreview, filterClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
 import { getAppearance, setAppearance } from "../lib/appearance";
@@ -199,6 +199,15 @@ export function SummonPanel() {
     setBusy(true);
     sfx.paste();
     try {
+      if (clip.kind === "image") {
+        if (!clip.path) {
+          await invoke("summon_hide");
+          return;
+        }
+        suppressImageCapture();
+        await summonPasteImagePath(clip.path);
+        return;
+      }
       const value = clip.value ?? "";
       suppressClipboardCapture(value);
       await navigator.clipboard.writeText(value);
@@ -668,7 +677,7 @@ function ResultRow({ item, active, onClick, onHover }: { item: Item; active: boo
 }
 
 function ClipResultRow({ clip, active, onClick, onHover }: { clip: ClipEntry; active: boolean; onClick: () => void; onHover: () => void }) {
-  const Icon = clip.isUrl ? Link2 : StickyNote;
+  const Icon = clip.kind === "image" ? ImageIcon : clip.isUrl ? Link2 : StickyNote;
   const preview = clipPreview(clip);
   const source = clip.sourceApp?.trim();
   const rowRef = useRef<HTMLDivElement>(null);
@@ -684,12 +693,12 @@ function ClipResultRow({ clip, active, onClick, onHover }: { clip: ClipEntry; ac
       className="relative flex cursor-pointer select-none items-center gap-3 rounded-[14px] px-2.5 py-2.5"
     >
       {active && <motion.div layoutId="sel-bg" transition={SEL} className="absolute inset-0 rounded-[14px] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_10px_26px_-12px_rgba(0,0,0,0.24)] ring-1 ring-black/[0.05]" />}
-      <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" style={{ color: TINTS.sky.tileInk }}>
-        <Icon size={19} strokeWidth={1.9} />
+      <span className="relative z-10 grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px]" style={{ color: TINTS.sky.tileInk }}>
+        {clip.kind === "image" && clip.thumb ? <img src={clip.thumb} alt="" draggable={false} className="h-full w-full object-cover" /> : <Icon size={19} strokeWidth={1.9} />}
       </span>
       <span className="relative z-10 min-w-0 flex-1">
         <span className="block truncate text-[14px] font-semibold tracking-[-0.01em] text-[var(--ink)]">{clip.label}</span>
-        <span className="mt-px block truncate text-[11.5px] text-[var(--faint)]">{preview || "Copied text"}</span>
+        <span className="mt-px block truncate text-[11.5px] text-[var(--faint)]">{clip.kind === "image" ? (source ? `Image · from ${source}` : "Image") : preview || "Copied text"}</span>
       </span>
       <AnimatePresence>
         {active && (

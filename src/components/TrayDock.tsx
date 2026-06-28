@@ -8,7 +8,7 @@ import { useItems } from "../lib/items-store";
 import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathOut, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
-import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, suppressClipboardCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
+import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { getAppearance } from "../lib/appearance";
 import { setSetting, useSettings } from "../lib/settings";
 import { relativeTime } from "./ItemCard";
@@ -440,13 +440,19 @@ export function TrayDock() {
   }
 
   async function pasteClip(clip: ClipEntry) {
-    if (busy || clip.kind === "image") return; // image paste lands with the capture step
+    if (busy) return;
+    if (clip.kind === "image" && !clip.path) return;
     setBusy(true);
     sfx.paste();
     try {
-      const value = clip.value ?? "";
-      suppressClipboardCapture(value);
-      await invoke("tray_paste", { value });
+      if (clip.kind === "image") {
+        suppressImageCapture();
+        await invoke("tray_paste_image", { path: clip.path });
+      } else {
+        const value = clip.value ?? "";
+        suppressClipboardCapture(value);
+        await invoke("tray_paste", { value });
+      }
       setFlashId(clip.id);
       window.setTimeout(() => setFlashId((c) => (c === clip.id ? null : c)), 950);
     } catch {
@@ -457,15 +463,23 @@ export function TrayDock() {
   }
 
   function stageClip(clip: ClipEntry) {
-    if (clip.kind !== "text") return;
-    addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl });
+    if (clip.kind === "image") {
+      if (!clip.path) return;
+      addToTray({ kind: "file", path: clip.path, mime: clip.mime, label: clip.label });
+    } else {
+      addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl });
+    }
     sfx.move();
     flashNotice("Staged in Shelf");
   }
 
   function saveClip(clip: ClipEntry) {
-    if (clip.kind !== "text") return;
-    const id = addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl, transient: true });
+    const id =
+      clip.kind === "image"
+        ? clip.path
+          ? addToTray({ kind: "file", path: clip.path, mime: clip.mime, label: clip.label, transient: true })
+          : null
+        : addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl, transient: true });
     if (!id) return;
     sfx.save();
     void invoke("open_commit", { ids: [id], category: "" });
@@ -1493,7 +1507,7 @@ function ClipRow({
   onRemove: () => void;
 }) {
   const Icon = clip.kind === "image" ? ImageIcon : clip.isUrl ? Link2 : StickyNote;
-  const canDrag = clip.kind === "text";
+  const canDrag = clip.kind === "text" || (clip.kind === "image" && !!clip.path);
   const preview = clipPreview(clip);
   const source = clip.sourceApp?.trim();
   return (
@@ -1509,7 +1523,8 @@ function ClipRow({
         canDrag
           ? (ev) => {
               ev.preventDefault();
-              void dragTextOut(clip.value ?? "", clip.label);
+              if (clip.kind === "image" && clip.path) void dragPathOut(clip.path, true);
+              else void dragTextOut(clip.value ?? "", clip.label);
             }
           : undefined
       }
@@ -1528,7 +1543,7 @@ function ClipRow({
         {preview && preview !== clip.label && <span className="block truncate text-[10px] text-[var(--fainter)] tabular">{source ? `${source} · ${relativeTime(clip.ts)}` : relativeTime(clip.ts)}</span>}
       </span>
       <div className="relative z-10 flex shrink-0 items-center gap-0.5">
-        {clip.kind === "text" && (
+        {(clip.kind === "text" || clip.kind === "image") && (
           <>
             <motion.button whileTap={{ scale: 0.85 }} type="button" onClick={(ev) => { ev.stopPropagation(); onPaste(); }} aria-label="Paste at cursor" title="Paste" className="grid h-6 w-6 place-items-center rounded-[7px] text-[var(--muted)] hover:bg-black/[0.06]">
               <CornerDownLeft size={12} />
