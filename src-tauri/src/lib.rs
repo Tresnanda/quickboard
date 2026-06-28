@@ -120,6 +120,9 @@ pub fn run() {
                     .menu(&menu)
                     .on_menu_event(|app, event| match event.id.as_ref() {
                         "tray_open" => {
+                            // Reopening from the menu bar brings the dock icon back.
+                            #[cfg(target_os = "macos")]
+                            let _ = app.set_dock_visibility(true);
                             if let Some(main) = app.get_webview_window("main") {
                                 let _ = main.show();
                                 let _ = main.set_focus();
@@ -153,6 +156,11 @@ pub fn run() {
                 if !hidden_launch {
                     let _ = main.show();
                     let _ = main.set_focus();
+                } else {
+                    // Silent login launch: no window is shown, so live in the menu bar
+                    // only (no dock icon) until the user opens quickboard.
+                    #[cfg(target_os = "macos")]
+                    let _ = app.handle().set_dock_visibility(false);
                 }
             }
             Ok(())
@@ -191,6 +199,8 @@ pub fn run() {
             commands::open_commit,
             commands::hide_tray,
             commands::tray_paste,
+            commands::tray_paste_image,
+            commands::summon_paste_image_path,
             commands::accessibility_trusted,
             commands::open_accessibility_settings,
         ])
@@ -198,12 +208,35 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             use tauri::Manager;
-            // Clicking the dock icon (with the main window hidden) re-opens it.
-            if let tauri::RunEvent::Reopen { .. } = event {
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
+            match event {
+                // Clicking the dock icon (with the main window hidden) re-opens it.
+                tauri::RunEvent::Reopen { .. } => {
+                    #[cfg(target_os = "macos")]
+                    let _ = app.set_dock_visibility(true);
+                    if let Some(main) = app.get_webview_window("main") {
+                        let _ = main.show();
+                        let _ = main.set_focus();
+                    }
                 }
+                // Background menu-bar utility: Cmd+Q (and last-window-closed) fire an
+                // app-level exit with `code == None`. Keep the process alive — just hide
+                // the main window — so the ⌥Space summon and the tray stay available.
+                // A real quit comes from the tray's "Quit quickboard" (app.exit(0) →
+                // `code == Some(0)`), which we let through untouched.
+                tauri::RunEvent::ExitRequested { code, api, .. } => {
+                    if code.is_none() {
+                        api.prevent_exit();
+                        if let Some(main) = app.get_webview_window("main") {
+                            let _ = main.hide();
+                        }
+                        // Cmd+Q sends quickboard fully into the menu bar: drop the dock
+                        // icon too (the lighter red-button close keeps it). The icon
+                        // returns when the window is reopened (tray "Open" / Reopen).
+                        #[cfg(target_os = "macos")]
+                        let _ = app.set_dock_visibility(false);
+                    }
+                }
+                _ => {}
             }
         });
 }

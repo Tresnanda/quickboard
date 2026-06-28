@@ -10,6 +10,8 @@ export type ClipEntry = {
   kind: "text" | "image";
   value?: string; // kind "text"
   thumb?: string; // kind "image" — small data-url preview
+  path?: string; // kind "image" — temp file holding the full-res bytes (paste/stage/save/drag)
+  mime?: string; // kind "image" — e.g. "image/png"
   label: string;
   isUrl?: boolean;
   sourceApp?: string;
@@ -18,6 +20,7 @@ export type ClipEntry = {
 
 const KEY = "qb_clipboard_v1";
 const SUPPRESS_KEY = "qb_clipboard_suppress_v1";
+const IMG_SUPPRESS_KEY = "qb_clipboard_img_suppress_v1";
 export const CLIPBOARD_CAP = 100; // rolling buffer — oldest fall off
 const SUPPRESS_TTL_MS = 5000;
 
@@ -123,11 +126,38 @@ export function shouldSuppressClipboardCapture(value: string): boolean {
   return true;
 }
 
+// Image copies carry no stable text key, so self-paste suppression is a short-lived
+// timestamp instead: pasting an image re-writes the pasteboard, which the watcher
+// would otherwise re-capture. Stamped here, consumed by the next image capture.
+// Cross-window via localStorage (paste fires in the tray/summon webview; capture
+// mirrors in the main window).
+export function suppressImageCapture(): void {
+  try {
+    localStorage.setItem(IMG_SUPPRESS_KEY, String(Date.now()));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function shouldSuppressImageCapture(): boolean {
+  try {
+    const raw = localStorage.getItem(IMG_SUPPRESS_KEY);
+    if (!raw) return false;
+    const ts = Number(raw);
+    if (!Number.isFinite(ts) || Date.now() - ts > SUPPRESS_TTL_MS) return false;
+    localStorage.removeItem(IMG_SUPPRESS_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Push a fresh copy to the front, de-duping an immediate repeat, capping the buffer. */
 export function addClip(entry: Omit<ClipEntry, "id" | "ts">): void {
   const cur = read();
   const head = cur[0];
-  if (head && head.kind === entry.kind && (head.value ?? "") === (entry.value ?? "") && head.label === entry.label && (head.sourceApp ?? "") === (entry.sourceApp ?? "")) return;
+  // de-dupe an immediate repeat: same text value, or same image (identical thumb pixels)
+  if (head && head.kind === entry.kind && (head.value ?? "") === (entry.value ?? "") && (head.thumb ?? "") === (entry.thumb ?? "") && head.label === entry.label && (head.sourceApp ?? "") === (entry.sourceApp ?? "")) return;
   write([{ ...entry, label: entry.label || labelForClipValue(entry.value ?? ""), id: uid(), ts: Math.floor(Date.now() / 1000) }, ...cur].slice(0, CLIPBOARD_CAP));
 }
 

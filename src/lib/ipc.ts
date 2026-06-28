@@ -28,6 +28,8 @@ export const stageTextFile = (label: string, value: string) => invoke<string>("s
 export const stageBlobFile = (dataUrl: string, name: string) => invoke<string>("stage_blob_file", { dataUrl, name });
 export const getImageDataUrl = (id: string) => invoke<string>("get_image_data_url", { id });
 export const summonPasteImage = (id: string) => invoke<void>("summon_paste_image", { id });
+export const trayPasteImage = (path: string) => invoke<void>("tray_paste_image", { path });
+export const summonPasteImagePath = (path: string) => invoke<void>("summon_paste_image_path", { path });
 export const setPinned = (id: string, pinned: boolean) => boardChanged(invoke<void>("set_pinned", { id, pinned }));
 export const deleteItem = (id: string) => boardChanged(invoke<void>("delete_item", { id }));
 export const renameCategory = (oldName: string, newName: string, environment: string | null) =>
