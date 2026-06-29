@@ -152,12 +152,32 @@ export function shouldSuppressImageCapture(): boolean {
   }
 }
 
+// Captured images have no inherent name, so give each a unique, monotonic one —
+// "Pasted image 1", "Pasted image 2", … — so a lane (or board) full of them stays
+// distinguishable. Persists across sessions; only the main window captures, so the
+// read-increment-write isn't raced.
+const IMG_SEQ_KEY = "qb_clipboard_img_seq_v1";
+export function nextPastedImageLabel(): string {
+  let n = 1;
+  try {
+    n = (Number(localStorage.getItem(IMG_SEQ_KEY)) || 0) + 1;
+    localStorage.setItem(IMG_SEQ_KEY, String(n));
+  } catch {
+    /* ignore */
+  }
+  return `Pasted image ${n}`;
+}
+
 /** Push a fresh copy to the front, de-duping an immediate repeat, capping the buffer. */
 export function addClip(entry: Omit<ClipEntry, "id" | "ts">): void {
   const cur = read();
   const head = cur[0];
-  // de-dupe an immediate repeat: same text value, or same image (identical thumb pixels)
-  if (head && head.kind === entry.kind && (head.value ?? "") === (entry.value ?? "") && (head.thumb ?? "") === (entry.thumb ?? "") && head.label === entry.label && (head.sourceApp ?? "") === (entry.sourceApp ?? "")) return;
+  // de-dupe an immediate repeat from the head: images by identical pixels (their
+  // per-capture label is always unique), text by value + label.
+  if (head && head.kind === entry.kind && (head.sourceApp ?? "") === (entry.sourceApp ?? "")) {
+    const dup = entry.kind === "image" ? (head.thumb ?? "") === (entry.thumb ?? "") : (head.value ?? "") === (entry.value ?? "") && head.label === entry.label;
+    if (dup) return;
+  }
   write([{ ...entry, label: entry.label || labelForClipValue(entry.value ?? ""), id: uid(), ts: Math.floor(Date.now() / 1000) }, ...cur].slice(0, CLIPBOARD_CAP));
 }
 

@@ -6,7 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Sparkles } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { useSettings } from "../lib/settings";
-import { addClip, labelForClipValue, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
+import { addClip, labelForClipValue, nextPastedImageLabel, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
 import { readImageAsDataUrl } from "../lib/ipc";
 import { Sidebar } from "./Sidebar";
 import { DetailModal } from "./DetailModal";
@@ -101,7 +101,7 @@ export function AppShell() {
         try {
           const full = await readImageAsDataUrl(path);
           const thumb = await makeThumb(full);
-          addClip({ kind: "image", path, thumb, mime: "image/png", label: "Image", sourceApp });
+          addClip({ kind: "image", path, thumb, mime: "image/png", label: nextPastedImageLabel(), sourceApp });
         } catch {
           /* best-effort */
         }
