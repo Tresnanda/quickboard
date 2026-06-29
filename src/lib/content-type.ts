@@ -28,6 +28,9 @@ export function contentType(item: Item, value?: string | null): ContentType {
   if (explicit) return explicit;
 
   if (item.kind === "File") {
+    // Prefer the file's real stored type; fall back to the title's extension for
+    // confidential files (whose mime isn't surfaced) and legacy items.
+    if (item.mime?.startsWith("image/")) return "image";
     return IMAGE_EXT.has(fileExt(item.label)) ? "image" : "file";
   }
   if (value) {

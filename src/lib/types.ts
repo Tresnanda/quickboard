@@ -13,6 +13,7 @@ export type Item = {
   last_used_at: number;
   use_count: number;
   environment: string;
+  mime?: string | null; // File items only — the stored mime (e.g. "image/png"); null for text/confidential
 };
 
 // Rich content type used by the new UI (tabs / card rendering). The backend only

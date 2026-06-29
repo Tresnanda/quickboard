@@ -167,29 +167,50 @@ impl Store {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id,label,kind,category,confidential,pinned,created_at,updated_at,last_used_at,use_count,environment FROM items",
+                "SELECT id,label,kind,category,confidential,pinned,created_at,updated_at,last_used_at,use_count,environment,body FROM items",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
                 let kind_str: String = r.get(2)?;
                 let kind = if kind_str == "File" { Kind::File } else { Kind::Text };
-                Ok(Item {
-                    id: r.get(0)?,
-                    label: r.get(1)?,
-                    kind,
-                    category: r.get(3)?,
-                    confidential: r.get::<_, i64>(4)? != 0,
-                    pinned: r.get::<_, i64>(5)? != 0,
-                    created_at: r.get(6)?,
-                    updated_at: r.get(7)?,
-                    last_used_at: r.get(8)?,
-                    use_count: r.get(9)?,
-                    environment: r.get(10)?,
-                })
+                let body: Vec<u8> = r.get(11)?;
+                Ok((
+                    Item {
+                        id: r.get(0)?,
+                        label: r.get(1)?,
+                        kind,
+                        category: r.get(3)?,
+                        confidential: r.get::<_, i64>(4)? != 0,
+                        pinned: r.get::<_, i64>(5)? != 0,
+                        created_at: r.get(6)?,
+                        updated_at: r.get(7)?,
+                        last_used_at: r.get(8)?,
+                        use_count: r.get(9)?,
+                        environment: r.get(10)?,
+                        mime: None,
+                    },
+                    body,
+                ))
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
+        let mut items = Vec::new();
+        for row in rows {
+            let (mut item, body) = row.map_err(|e| e.to_string())?;
+            // Surface the stored mime for non-confidential files so the UI can classify
+            // images by their real type, not just the title's extension. The file's
+            // metadata (filename/mime/size) lives in the encrypted `body`; confidential
+            // metas are left alone (not bulk-decrypted) and fall back to other signals.
+            if item.kind == Kind::File && !item.confidential {
+                if let Ok(pt) = crate::crypto::decrypt(&self.key, &body) {
+                    if let Ok(meta) = serde_json::from_slice::<serde_json::Value>(&pt) {
+                        item.mime = meta["mime"].as_str().map(|s| s.to_string());
+                    }
+                }
+            }
+            items.push(item);
+        }
+        Ok(items)
     }
 
     pub fn get_text(&self, id: &str) -> Result<String, String> {
@@ -360,5 +381,23 @@ mod tests {
         let (name, bytes) = s.read_file_bytes(&id).unwrap();
         assert_eq!(name, "ktp.png");
         assert_eq!(bytes, b"PNGBYTES");
+    }
+
+    #[test]
+    fn list_exposes_mime_for_nonconfidential_files() {
+        let s = Store::open_in_memory(crate::crypto::new_key()).unwrap();
+        s.add_file("Logo", "Brand", "Personal", false, "logo.png", "image/png", b"PNG").unwrap();
+        let items = s.list().unwrap();
+        assert_eq!(items[0].mime.as_deref(), Some("image/png"));
+    }
+
+    #[test]
+    fn list_omits_mime_for_text_and_confidential() {
+        let s = Store::open_in_memory(crate::crypto::new_key()).unwrap();
+        s.add_text("Note", "Home", "Personal", false, "hello").unwrap();
+        s.add_file("KTP", "Identity", "Personal", true, "ktp.png", "image/png", b"PNG").unwrap();
+        for it in s.list().unwrap() {
+            assert_eq!(it.mime, None);
+        }
     }
 }

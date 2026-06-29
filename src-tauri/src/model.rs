@@ -27,4 +27,9 @@ pub struct Item {
     pub last_used_at: i64,
     pub use_count: i64,
     pub environment: String,
+    /// File items only: the stored mime (e.g. "image/png"), surfaced so the UI can
+    /// classify by the file's real type rather than its title. `None` for text items
+    /// and confidential files (whose metadata isn't bulk-decrypted on list).
+    #[serde(default)]
+    pub mime: Option<String>,
 }
