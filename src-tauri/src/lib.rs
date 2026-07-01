@@ -157,6 +157,59 @@ pub fn run() {
                 let _tray = tray.build(app)?;
             }
 
+            // App menu. macOS routes Cmd+Q through the menu's Quit item, which
+            // terminates WITHOUT firing RunEvent::ExitRequested — so prevent_exit()
+            // never runs. Own the menu instead: a custom Quit that HIDES to the menu
+            // bar (⌥Space + tray stay alive), plus the standard Edit items so
+            // Cmd+C/V/X/A keep working in text fields. A real quit is the tray's "Quit".
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+                let quit_hide = MenuItem::with_id(app, "app_quit_hide", "Quit quickboard", true, Some("CmdOrCtrl+Q"))?;
+                let app_menu = Submenu::with_items(
+                    app,
+                    "quickboard",
+                    true,
+                    &[
+                        &PredefinedMenuItem::hide(app, None)?,
+                        &PredefinedMenuItem::hide_others(app, None)?,
+                        &PredefinedMenuItem::show_all(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &quit_hide,
+                    ],
+                )?;
+                let edit_menu = Submenu::with_items(
+                    app,
+                    "Edit",
+                    true,
+                    &[
+                        &PredefinedMenuItem::undo(app, None)?,
+                        &PredefinedMenuItem::redo(app, None)?,
+                        &PredefinedMenuItem::separator(app)?,
+                        &PredefinedMenuItem::cut(app, None)?,
+                        &PredefinedMenuItem::copy(app, None)?,
+                        &PredefinedMenuItem::paste(app, None)?,
+                        &PredefinedMenuItem::select_all(app, None)?,
+                    ],
+                )?;
+                let window_menu = Submenu::with_items(
+                    app,
+                    "Window",
+                    true,
+                    &[&PredefinedMenuItem::minimize(app, None)?, &PredefinedMenuItem::close_window(app, None)?],
+                )?;
+                app.set_menu(Menu::with_items(app, &[&app_menu, &edit_menu, &window_menu])?)?;
+                app.on_menu_event(|app, event| {
+                    if event.id() == "app_quit_hide" {
+                        use tauri::Manager;
+                        if let Some(main) = app.get_webview_window("main") {
+                            let _ = main.hide();
+                        }
+                        #[cfg(target_os = "macos")]
+                        let _ = app.set_dock_visibility(false);
+                    }
+                });
+            }
+
             // Background-app behavior: the main window starts hidden (config) so a
             // login launch is silent. Show it on a normal launch; closing it just
             // hides it (the app keeps running so the summon stays available).
@@ -242,15 +295,16 @@ pub fn run() {
                 // so the ⌥Space summon and the tray stay available. Only the tray's
                 // "Quit quickboard" (which sets WANTS_QUIT) is a real quit; everything
                 // else is prevented.
+                // Defensive: the tray's "Quit" sets WANTS_QUIT before app.exit(0) (a
+                // real quit, let through). Anything else that reaches an app-level exit
+                // request — e.g. the last window closing — is kept alive. (Cmd+Q no
+                // longer lands here; the app menu hides instead — see setup.)
                 tauri::RunEvent::ExitRequested { api, .. } => {
                     if !WANTS_QUIT.load(Ordering::SeqCst) {
                         api.prevent_exit();
                         if let Some(main) = app.get_webview_window("main") {
                             let _ = main.hide();
                         }
-                        // Cmd+Q sends quickboard fully into the menu bar: drop the dock
-                        // icon too (the lighter red-button close keeps it). The icon
-                        // returns when the window is reopened (tray "Open" / Reopen).
                         #[cfg(target_os = "macos")]
                         let _ = app.set_dock_visibility(false);
                     }
