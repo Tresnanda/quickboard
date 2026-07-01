@@ -7,7 +7,8 @@ import { Sparkles } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { useSettings } from "../lib/settings";
 import { addClip, labelForClipValue, nextPastedImageLabel, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
-import { readImageAsDataUrl } from "../lib/ipc";
+import { existingPaths, readImageAsDataUrl, sweepStagedFiles } from "../lib/ipc";
+import { getTray, pruneDeadFiles } from "../lib/tray";
 import { Sidebar } from "./Sidebar";
 import { DetailModal } from "./DetailModal";
 import { NewItemSheet } from "./NewItemSheet";
@@ -83,6 +84,26 @@ export function AppShell() {
       toast({ message: `${now} items — your board is thriving!`, icon: <Sparkles size={14} strokeWidth={2.2} />, tone: "gold" });
     }
   }, [items.length, fire, toast]);
+
+  // Startup reconcile of the Shelf's staged image files. The tray keeps a file's
+  // path forever (localStorage), but staged bytes used to live in the OS temp dir
+  // and got reaped after ~3 days — a staged image would silently "turn into a
+  // file". Bytes now live in a durable dir; on launch we (1) prune entries whose
+  // file is already gone (unrecoverable) and (2) reclaim orphaned staged files no
+  // entry points at. Main window only (always loaded, single instance); no undo
+  // survives a restart, so an unreferenced staged file is a true orphan.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const paths = getTray().filter((e) => e.kind === "file" && e.path).map((e) => e.path as string);
+        const alive = paths.length ? await existingPaths(paths) : [];
+        pruneDeadFiles(new Set(alive));
+        await sweepStagedFiles(alive);
+      } catch {
+        /* best-effort maintenance */
+      }
+    })();
+  }, []);
 
   // Clipboard history capture — the main window owns it (it's always loaded, even
   // hidden in the background). The Rust watcher only reads/emits while enabled; we

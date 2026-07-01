@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { fileToTemp, getImageDataUrl, getTextValue, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
+import { fileToTemp, getImageDataUrl, getTextValue, persistStagedFile, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
 import { dragMixedOut, dragOutItem, dragPathOut, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
@@ -462,10 +462,23 @@ export function TrayDock() {
     }
   }
 
-  function stageClip(clip: ClipEntry) {
+  // A Clipboard-lane image lives in the ephemeral clip temp dir; copy it into the
+  // durable staged dir first so the Shelf entry doesn't outlive its bytes.
+  async function stagedImagePath(clip: ClipEntry): Promise<string | null> {
+    if (!clip.path) return null;
+    try {
+      return await persistStagedFile(clip.path, clip.label, clip.mime);
+    } catch {
+      flashNotice("Couldn't stage image — its data expired");
+      return null;
+    }
+  }
+
+  async function stageClip(clip: ClipEntry) {
     if (clip.kind === "image") {
-      if (!clip.path) return;
-      addToTray({ kind: "file", path: clip.path, mime: clip.mime, label: clip.label });
+      const path = await stagedImagePath(clip);
+      if (!path) return;
+      addToTray({ kind: "file", path, mime: clip.mime, label: clip.label });
     } else {
       addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl });
     }
@@ -473,13 +486,15 @@ export function TrayDock() {
     flashNotice("Staged in Shelf");
   }
 
-  function saveClip(clip: ClipEntry) {
-    const id =
-      clip.kind === "image"
-        ? clip.path
-          ? addToTray({ kind: "file", path: clip.path, mime: clip.mime, label: clip.label, transient: true })
-          : null
-        : addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl, transient: true });
+  async function saveClip(clip: ClipEntry) {
+    let id: string | null;
+    if (clip.kind === "image") {
+      const path = await stagedImagePath(clip);
+      if (!path) return;
+      id = addToTray({ kind: "file", path, mime: clip.mime, label: clip.label, transient: true });
+    } else {
+      id = addToTray({ kind: "text", value: clip.value ?? "", label: clip.label, isUrl: clip.isUrl, transient: true });
+    }
     if (!id) return;
     sfx.save();
     void invoke("open_commit", { ids: [id], category: "" });
@@ -760,7 +775,7 @@ export function TrayDock() {
               ) : (
                 <AnimatePresence initial={false} mode="popLayout">
                   {visibleClips.map((c) => (
-                    <ClipRow key={c.id} clip={c} flash={flashId === c.id} onPaste={() => void pasteClip(c)} onSave={() => saveClip(c)} onStage={() => stageClip(c)} onRemove={() => removeClip(c.id)} />
+                    <ClipRow key={c.id} clip={c} flash={flashId === c.id} onPaste={() => void pasteClip(c)} onSave={() => void saveClip(c)} onStage={() => void stageClip(c)} onRemove={() => removeClip(c.id)} />
                   ))}
                 </AnimatePresence>
               )}

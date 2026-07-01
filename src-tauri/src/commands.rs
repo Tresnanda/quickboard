@@ -308,24 +308,20 @@ pub fn stage_text_file(app: tauri::AppHandle, label: String, value: String) -> R
     Ok(p.to_string_lossy().to_string())
 }
 
-/// Write a blob dropped into the webview to a temp file so it can be staged on the
-/// tray like any other file. A browser image drag carries bytes (a `data:` URL),
-/// not a path — and with native drag-drop disabled on the tray, Finder files arrive
-/// as bytes too. Each blob gets its own temp subdir so the basename stays clean (it
-/// drives the stored filename + mime when the entry is committed to the board).
-#[tauri::command]
-pub fn stage_blob_file(app: tauri::AppHandle, data_url: String, name: String) -> Result<String, String> {
-    use base64::Engine as _;
+/// The durable directory staged tray files live in. NOT the OS temp dir: macOS
+/// reaps files under `/var/folders/.../T/` after ~3 days, but the tray keeps a path
+/// reference indefinitely (localStorage), so a staged image that outlived its bytes
+/// silently "turned into a file". Living under app-data, staged bytes survive
+/// reboots; orphans are reclaimed by `sweep_staged_files` on startup (not on remove,
+/// which is undoable).
+fn staged_root(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     use tauri::Manager;
-    let comma = data_url.find(',').ok_or_else(|| "bad data url".to_string())?;
-    let header = &data_url[..comma];
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(data_url[comma + 1..].as_bytes())
-        .map_err(|e| e.to_string())?;
+    Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("staged"))
+}
 
-    // sanitize the supplied name; if it carries no extension, derive one from the mime
-    let mime = header.strip_prefix("data:").and_then(|h| h.split(';').next()).unwrap_or("");
-    let ext = match mime {
+/// Filename extension for a known image mime (empty when unknown).
+fn ext_for_mime(mime: &str) -> &'static str {
+    match mime {
         "image/png" => "png",
         "image/jpeg" => "jpg",
         "image/gif" => "gif",
@@ -335,7 +331,18 @@ pub fn stage_blob_file(app: tauri::AppHandle, data_url: String, name: String) ->
         "image/bmp" => "bmp",
         "image/tiff" => "tiff",
         _ => "",
-    };
+    }
+}
+
+fn now_nanos() -> u128 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+}
+
+/// Write `bytes` to `root/<stamp>/<clean name>` and return the path. A unique
+/// per-file subdir keeps the basename clean (it drives the committed filename +
+/// mime) while avoiding collisions. `ext` backfills an extension when `name` has
+/// none.
+fn write_staged(root: &std::path::Path, stamp: u128, name: &str, ext: &str, bytes: &[u8]) -> Result<String, String> {
     let safe: String = name
         .chars()
         .map(|c| if c.is_alphanumeric() || c == '.' || c == ' ' || c == '-' || c == '_' { c } else { '_' })
@@ -345,22 +352,97 @@ pub fn stage_blob_file(app: tauri::AppHandle, data_url: String, name: String) ->
     if !fname.contains('.') && !ext.is_empty() {
         fname = format!("{fname}.{ext}");
     }
-
-    // a unique subdir keeps the basename clean while avoiding collisions across drops
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    let dir = app
-        .path()
-        .temp_dir()
-        .map_err(|e| e.to_string())?
-        .join("quickboard-staged")
-        .join(format!("{stamp:x}"));
+    let dir = root.join(format!("{stamp:x}"));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let p = dir.join(&fname);
-    std::fs::write(&p, &bytes).map_err(|e| e.to_string())?;
+    std::fs::write(&p, bytes).map_err(|e| e.to_string())?;
     Ok(p.to_string_lossy().to_string())
+}
+
+/// Write a blob dropped into the webview to the durable staged dir so it can be
+/// staged on the tray like any other file. A browser image drag carries bytes (a
+/// `data:` URL), not a path — and with native drag-drop disabled on the tray,
+/// Finder files arrive as bytes too.
+#[tauri::command]
+pub fn stage_blob_file(app: tauri::AppHandle, data_url: String, name: String) -> Result<String, String> {
+    use base64::Engine as _;
+    let comma = data_url.find(',').ok_or_else(|| "bad data url".to_string())?;
+    let header = &data_url[..comma];
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_url[comma + 1..].as_bytes())
+        .map_err(|e| e.to_string())?;
+    let mime = header.strip_prefix("data:").and_then(|h| h.split(';').next()).unwrap_or("");
+    write_staged(&staged_root(&app)?, now_nanos(), &name, ext_for_mime(mime), &bytes)
+}
+
+/// Copy an already-written file (a Clipboard-lane image lives in the ephemeral clip
+/// temp dir) into the durable staged dir, so a Shelf entry that references it
+/// survives temp reaping. `mime` backfills an extension when `name` has none.
+#[tauri::command]
+pub fn persist_staged_file(app: tauri::AppHandle, path: String, name: String, mime: Option<String>) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    write_staged(&staged_root(&app)?, now_nanos(), &name, ext_for_mime(mime.as_deref().unwrap_or("")), &bytes)
+}
+
+/// Return the subset of `paths` that still exist on disk — lets the tray prune
+/// entries whose staged bytes were already reaped (they're unrecoverable).
+#[tauri::command]
+pub fn existing_paths(paths: Vec<String>) -> Vec<String> {
+    paths.into_iter().filter(|p| std::path::Path::new(p).exists()).collect()
+}
+
+/// Whether `p` was modified within `grace` (unknown/future mtime counts as old).
+fn young(p: &std::path::Path, grace: std::time::Duration) -> bool {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .map(|age| age < grace)
+        .unwrap_or(false)
+}
+
+/// Remove files under `root` not in `keep` (and older than `grace`), dropping the
+/// now-empty stamp subdirs. Best-effort: per-entry errors are skipped. Returns the
+/// count removed.
+fn sweep_dir(root: &std::path::Path, keep: &std::collections::HashSet<String>, grace: std::time::Duration) -> u32 {
+    let mut removed = 0u32;
+    let subdirs = match std::fs::read_dir(root) {
+        Ok(e) => e,
+        Err(_) => return 0, // no staged dir yet — nothing to reclaim
+    };
+    for sub in subdirs.flatten() {
+        let subdir = sub.path();
+        if !subdir.is_dir() {
+            continue;
+        }
+        let mut kept_any = false;
+        if let Ok(files) = std::fs::read_dir(&subdir) {
+            for f in files.flatten() {
+                let p = f.path();
+                let path_str = p.to_string_lossy().to_string();
+                if keep.contains(&path_str) || young(&p, grace) {
+                    kept_any = true; // referenced, or too fresh to judge — leave it
+                } else if std::fs::remove_file(&p).is_ok() {
+                    removed += 1;
+                } else {
+                    kept_any = true;
+                }
+            }
+        }
+        if !kept_any {
+            let _ = std::fs::remove_dir_all(&subdir);
+        }
+    }
+    removed
+}
+
+/// Delete staged files no longer referenced by the tray. Run on startup: no undo is
+/// pending across a restart, so an unreferenced file is a true orphan. A short mtime
+/// grace spares a file another window staged mid-startup.
+#[tauri::command]
+pub fn sweep_staged_files(app: tauri::AppHandle, keep: Vec<String>) -> Result<u32, String> {
+    let root = staged_root(&app)?;
+    Ok(sweep_dir(&root, &keep.into_iter().collect(), std::time::Duration::from_secs(30)))
 }
 
 /// Whether the clipboard-history watcher captures copies. The poll thread runs
@@ -768,5 +850,73 @@ pub fn open_accessibility_settings() {
         let _ = std::process::Command::new("open")
             .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
             .spawn();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use std::time::Duration;
+
+    // A private scratch dir under the OS temp dir — these tests exercise the pure
+    // staged-file helpers, which take a root path (no AppHandle needed).
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("qb-cmd-test-{tag}-{}", now_nanos()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn write_staged_backfills_extension_from_mime() {
+        let root = scratch("ext");
+        let p = write_staged(&root, 0x1a, "logo", ext_for_mime("image/png"), b"PNG").unwrap();
+        assert!(p.ends_with("logo.png"), "got {p}");
+        assert_eq!(std::fs::read(&p).unwrap(), b"PNG");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn write_staged_keeps_existing_extension_and_names_empty_image() {
+        let root = scratch("keep");
+        let p = write_staged(&root, 1, "pic.jpg", "png", b"x").unwrap();
+        assert!(p.ends_with("pic.jpg"), "got {p}");
+        let q = write_staged(&root, 2, "   ", "png", b"y").unwrap();
+        assert!(q.ends_with("image.png"), "got {q}");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn existing_paths_keeps_only_files_that_exist() {
+        let root = scratch("exist");
+        let real = write_staged(&root, 3, "a.png", "", b"z").unwrap();
+        let gone = root.join("nope").join("x.png").to_string_lossy().to_string();
+        assert_eq!(existing_paths(vec![real.clone(), gone]), vec![real]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn sweep_removes_orphans_but_keeps_referenced() {
+        let root = scratch("sweep");
+        let keep = write_staged(&root, 0xaa, "keep.png", "", b"1").unwrap();
+        let orphan = write_staged(&root, 0xbb, "orphan.png", "", b"2").unwrap();
+        let set: HashSet<String> = [keep.clone()].into_iter().collect();
+        // grace 0: nothing counts as "young", so the orphan is eligible immediately.
+        assert_eq!(sweep_dir(&root, &set, Duration::ZERO), 1);
+        assert!(std::path::Path::new(&keep).exists());
+        assert!(!std::path::Path::new(&orphan).exists());
+        assert!(root.join("aa").exists()); // referenced entry's subdir stays
+        assert!(!root.join("bb").exists()); // emptied subdir is pruned
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn sweep_grace_spares_fresh_files() {
+        let root = scratch("grace");
+        let fresh = write_staged(&root, 0xcc, "fresh.png", "", b"3").unwrap();
+        // a just-written file is too young to reclaim even when unreferenced.
+        assert_eq!(sweep_dir(&root, &HashSet::new(), Duration::from_secs(3600)), 0);
+        assert!(std::path::Path::new(&fresh).exists());
+        std::fs::remove_dir_all(&root).ok();
     }
 }

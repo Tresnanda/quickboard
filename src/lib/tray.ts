@@ -87,6 +87,19 @@ export function removeFromTray(id: string): void {
   write(read().filter((e) => e.id !== id));
 }
 
+/**
+ * Drop file entries whose staged bytes are gone — a `kind:"file"` entry with a
+ * `path` that isn't in `alivePaths`. Their bytes are unrecoverable (the OS reaped
+ * the file), so the entry is dead weight: it can't preview, paste, save, or drag.
+ * Returns how many were pruned. Text and board-item entries are never touched.
+ */
+export function pruneDeadFiles(alivePaths: Set<string>): number {
+  const cur = read();
+  const next = cur.filter((e) => !(e.kind === "file" && !!e.path && !alivePaths.has(e.path)));
+  if (next.length !== cur.length) write(next);
+  return cur.length - next.length;
+}
+
 export function clearTray(): void {
   write([]);
   writeLanes([]); // empty tray → drop the (now pointless) lane structure too

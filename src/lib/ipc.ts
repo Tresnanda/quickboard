@@ -26,6 +26,15 @@ export const getTextValue = (id: string) => invoke<string>("get_text_value", { i
 export const fileToTemp = (id: string) => invoke<string>("file_to_temp", { id });
 export const stageTextFile = (label: string, value: string) => invoke<string>("stage_text_file", { label, value });
 export const stageBlobFile = (dataUrl: string, name: string) => invoke<string>("stage_blob_file", { dataUrl, name });
+// Copy an already-written file (e.g. an ephemeral Clipboard-lane image) into the
+// durable staged dir so a Shelf entry survives temp reaping. Returns the new path.
+export const persistStagedFile = (path: string, name: string, mime?: string | null) =>
+  invoke<string>("persist_staged_file", { path, name, mime: mime ?? null });
+// Which of `paths` still exist on disk — used to prune tray entries whose staged
+// bytes were reaped (they're unrecoverable).
+export const existingPaths = (paths: string[]) => invoke<string[]>("existing_paths", { paths });
+// Reclaim staged files no longer referenced by the tray (run on startup).
+export const sweepStagedFiles = (keep: string[]) => invoke<number>("sweep_staged_files", { keep });
 export const getImageDataUrl = (id: string) => invoke<string>("get_image_data_url", { id });
 export const summonPasteImage = (id: string) => invoke<void>("summon_paste_image", { id });
 export const trayPasteImage = (path: string) => invoke<void>("tray_paste_image", { path });
