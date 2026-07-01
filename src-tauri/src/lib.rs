@@ -20,6 +20,15 @@ pub mod commands;
 // Phase 1 "Summon anywhere": macOS focus capture/restore for the panel.
 pub mod summon;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Set by the tray's "Quit" before `app.exit(0)` so a real quit is let through.
+/// Everything else that requests app exit — Cmd+Q, last window closed — means
+/// "go to the menu bar," not "die." We can't trust `ExitRequested`'s `code` to
+/// tell them apart reliably across macOS/Tauri versions, so we gate on this
+/// explicit intent instead.
+static WANTS_QUIT: AtomicBool = AtomicBool::new(false);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -136,7 +145,10 @@ pub fn run() {
                         "tray_shelf" => {
                             let _ = commands::show_tray(app.clone());
                         }
-                        "tray_quit" => app.exit(0),
+                        "tray_quit" => {
+                            WANTS_QUIT.store(true, Ordering::SeqCst);
+                            app.exit(0);
+                        }
                         _ => {}
                     });
                 if let Some(icon) = app.default_window_icon() {
@@ -225,13 +237,13 @@ pub fn run() {
                         let _ = main.set_focus();
                     }
                 }
-                // Background menu-bar utility: Cmd+Q (and last-window-closed) fire an
-                // app-level exit with `code == None`. Keep the process alive — just hide
-                // the main window — so the ⌥Space summon and the tray stay available.
-                // A real quit comes from the tray's "Quit quickboard" (app.exit(0) →
-                // `code == Some(0)`), which we let through untouched.
-                tauri::RunEvent::ExitRequested { code, api, .. } => {
-                    if code.is_none() {
+                // Background menu-bar utility: Cmd+Q (and last-window-closed) request an
+                // app exit, but we keep the process alive — just hide the main window —
+                // so the ⌥Space summon and the tray stay available. Only the tray's
+                // "Quit quickboard" (which sets WANTS_QUIT) is a real quit; everything
+                // else is prevented.
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    if !WANTS_QUIT.load(Ordering::SeqCst) {
                         api.prevent_exit();
                         if let Some(main) = app.get_webview_window("main") {
                             let _ = main.hide();
