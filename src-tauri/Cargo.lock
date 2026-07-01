@@ -3231,7 +3231,7 @@ dependencies = [
 
 [[package]]
 name = "quickboard"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
