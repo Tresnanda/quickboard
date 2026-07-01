@@ -235,6 +235,7 @@ function UpdatesSection() {
         </button>
       </Row>
       {status === "uptodate" && <div className="px-4 py-2.5 text-[11.5px] text-[#3f7a57]">You're on the latest version.</div>}
+      {status === "restart_required" && <div className="px-4 py-2.5 text-[11.5px] text-[#3f7a57]">Update installed — quit quickboard and reopen it to finish.</div>}
       {status === "error" && <div className="px-4 py-2.5 text-[11.5px] text-[#b4424f]">Couldn't check for updates{error ? ` — ${error}` : ""}.</div>}
       {(status === "available" || downloading) && (
         <div className="flex items-center gap-4 px-4 py-3">

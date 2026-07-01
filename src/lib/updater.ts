@@ -13,6 +13,7 @@ export type UpdateStatus =
   | "available" // a newer version is ready to install
   | "downloading" // fetching + applying the update
   | "ready" // installed; relaunch pending
+  | "restart_required" // installed, but auto-relaunch was blocked — quit & reopen
   | "uptodate" // a manual check found nothing (transient, for feedback)
   | "error";
 
@@ -87,10 +88,18 @@ export async function installUpdate(): Promise<void> {
         if (total > 0) set({ progress: Math.min(got / total, 1) });
       } else if (e.event === "Finished") set({ progress: 1 });
     });
-    set({ status: "ready", progress: 1 });
-    await relaunch();
   } catch (e) {
     set({ status: "error", error: errText(e) });
+    return; // the download/install itself failed — nothing was applied
+  }
+  // Bytes are on disk now. The relaunch is separate and can be blocked (e.g. an
+  // older build without the process ACL) — if so, the update is still installed,
+  // so ask for a manual restart rather than reporting failure.
+  set({ status: "ready", progress: 1 });
+  try {
+    await relaunch();
+  } catch {
+    set({ status: "restart_required" });
   }
 }
 

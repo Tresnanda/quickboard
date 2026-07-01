@@ -12,7 +12,7 @@ import { installUpdate, useUpdater } from "../lib/updater";
 export function UpdateBanner() {
   const { status, version, progress } = useUpdater();
   const [dismissed, setDismissed] = useState(false);
-  const active = status === "available" || status === "downloading" || status === "ready";
+  const active = status === "available" || status === "downloading" || status === "ready" || status === "restart_required";
   const show = active && !dismissed;
   const busy = status === "downloading" || status === "ready";
 
@@ -35,11 +35,13 @@ export function UpdateBanner() {
           />
           <ArrowUpCircle size={14} strokeWidth={2.2} className="relative shrink-0 text-[#3f7a57]" />
           <span className="relative text-[12.5px] font-medium text-[#2f5c43]">
-            {status === "ready"
-              ? "Restarting into the new version…"
-              : status === "downloading"
-                ? `Updating to ${version}… ${Math.round(progress * 100)}%`
-                : `Version ${version} is ready`}
+            {status === "restart_required"
+              ? "Update installed — quit & reopen to finish"
+              : status === "ready"
+                ? "Restarting into the new version…"
+                : status === "downloading"
+                  ? `Updating to ${version}… ${Math.round(progress * 100)}%`
+                  : `Version ${version} is ready`}
           </span>
           {status === "available" && (
             <motion.button
