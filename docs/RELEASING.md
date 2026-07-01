@@ -19,6 +19,22 @@ users' apps pick it up on their next launch.
 To add a password to the key later: `pnpm tauri signer generate -w ~/.tauri/quickboard.key -f`
 (re-run before your first real release; it changes the pubkey, so update the config).
 
+### Code signing (so permissions survive updates)
+
+macOS ties an app's permissions (Accessibility, etc.) to its **code signature**. The
+default ad-hoc signing produces a *different* signature every build, so macOS treats
+each update as a new app and resets permissions. To avoid that, builds are signed with
+a stable self-signed cert:
+
+```sh
+./scripts/setup-signing.sh   # one-time: creates + trusts "Quickboard Self-Signed" (asks for your password)
+```
+
+After that, `./scripts/release.sh` signs automatically (it exports `APPLE_SIGNING_IDENTITY`;
+if the cert is missing it warns and builds unsigned). This is **not** Apple notarization —
+Gatekeeper still shows "unidentified developer" on a fresh install (right-click → Open once);
+for clean distribution to others you'd need an Apple Developer ID + notarization.
+
 ## Cut a release
 
 1. **Bump the version** in `src-tauri/tauri.conf.json` (`"version"`). The updater

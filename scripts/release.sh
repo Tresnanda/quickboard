@@ -23,6 +23,17 @@ echo "==> Building quickboard $TAG"
 export TAURI_SIGNING_PRIVATE_KEY="$(cat "$KEY")"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
 
+# Apple code-signing with our stable self-signed identity (run scripts/setup-signing.sh
+# once to create + trust it). A stable signature keeps macOS from resetting the app's
+# permissions (Accessibility, etc.) on every update. Falls back to unsigned if absent.
+SIGN_ID="Quickboard Self-Signed"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGN_ID"; then
+  export APPLE_SIGNING_IDENTITY="$SIGN_ID"
+  echo "==> Signing identity: $SIGN_ID"
+else
+  echo "==> WARNING: '$SIGN_ID' not set up (run scripts/setup-signing.sh) — building UNSIGNED; permissions will reset on update"
+fi
+
 pnpm tauri build
 
 BUNDLE="$ROOT/src-tauri/target/release/bundle"
