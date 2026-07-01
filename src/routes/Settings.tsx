@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ShieldCheck, ClipboardCopy, Trash2, Check } from "lucide-react";
+import { ShieldCheck, ClipboardCopy, Trash2, Check, RefreshCw, ArrowUpCircle } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import { SlotText } from "slot-text/react";
+import { checkForUpdate, installUpdate, useUpdater } from "../lib/updater";
 import { useItems } from "../lib/items-store";
 import { useSettings, setSetting, type Density } from "../lib/settings";
 import { useProfile } from "../lib/profile";
@@ -194,6 +196,8 @@ export function Settings() {
           </Row>
         </Section>
 
+        <UpdatesSection />
+
         <Section title="About">
           <Row label="Onboarding" hint="Run the first-launch flow again.">
             <button type="button" onClick={() => window.dispatchEvent(new Event("qb:replay-onboarding"))} className="qb-press qb-shine flex h-[32px] items-center gap-1.5 rounded-[9px] border border-[var(--border)] bg-white px-3 text-[12px] font-semibold text-[var(--ink)]">
@@ -205,6 +209,50 @@ export function Settings() {
 
       <ProfileEditor open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
+  );
+}
+
+function UpdatesSection() {
+  const { status, version, progress, error } = useUpdater();
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    void getVersion().then(setAppVersion).catch(() => {});
+  }, []);
+  const checking = status === "checking";
+  const downloading = status === "downloading" || status === "ready";
+
+  return (
+    <Section title="Updates">
+      <Row label="Version" hint={appVersion ? `quickboard ${appVersion} — updates install automatically from GitHub.` : "quickboard"}>
+        <button
+          type="button"
+          onClick={() => void checkForUpdate(false)}
+          disabled={checking || downloading}
+          className="qb-press flex h-[32px] items-center gap-1.5 rounded-[9px] border border-[var(--border)] bg-white px-3 text-[12px] font-semibold text-[var(--ink)] disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={checking ? "animate-spin" : ""} />
+          {checking ? "Checking…" : "Check for updates"}
+        </button>
+      </Row>
+      {status === "uptodate" && <div className="px-4 py-2.5 text-[11.5px] text-[#3f7a57]">You're on the latest version.</div>}
+      {status === "error" && <div className="px-4 py-2.5 text-[11.5px] text-[#b4424f]">Couldn't check for updates{error ? ` — ${error}` : ""}.</div>}
+      {(status === "available" || downloading) && (
+        <div className="flex items-center gap-4 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-semibold text-[var(--ink)]">Version {version} available</div>
+            <div className="mt-0.5 text-[11.5px] text-[var(--faint)]">{downloading ? `Downloading… ${Math.round(progress * 100)}%` : "Installs and restarts the app."}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void installUpdate()}
+            disabled={downloading}
+            className="qb-press flex h-[32px] items-center gap-1.5 rounded-[9px] bg-[var(--ink)] px-3 text-[12px] font-semibold text-white disabled:opacity-60"
+          >
+            <ArrowUpCircle size={14} /> {status === "ready" ? "Restarting…" : downloading ? "Installing…" : "Install & restart"}
+          </button>
+        </div>
+      )}
+    </Section>
   );
 }
 

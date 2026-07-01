@@ -34,6 +34,10 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         // Plan 2, Task 6: native file picker for the Add-item dialog.
         .plugin(tauri_plugin_dialog::init())
+        // In-app auto-update: checks GitHub Releases and self-installs. `process`
+        // backs the JS relaunch() after an update is applied.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // Phase 1 "Summon anywhere": a global hotkey toggles the quick-find panel.
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

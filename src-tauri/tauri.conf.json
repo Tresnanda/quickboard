@@ -58,8 +58,15 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY1RjgyOUFDNkUwRTM0ODMKUldTRE5BNXVyQ240OWRhbkNkTFRuZVdlRVVGUTc5VmhHdjZNL04wVFI1WEtWRlBkdFVWZjAwSXMK",
+      "endpoints": ["https://github.com/Tresnanda/quickboard/releases/latest/download/latest.json"]
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "category": "Productivity",
     "shortDescription": "Save anything, summon it to your cursor in seconds.",

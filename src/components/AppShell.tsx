@@ -15,7 +15,9 @@ import { NewItemSheet } from "./NewItemSheet";
 import { CommitSheet } from "./CommitSheet";
 import { CommandPalette } from "./CommandPalette";
 import { AccessibilityBanner } from "./AccessibilityBanner";
+import { UpdateBanner } from "./UpdateBanner";
 import { TrayNudge } from "./TrayNudge";
+import { checkForUpdate } from "../lib/updater";
 import { Onboarding } from "./Onboarding";
 import { useConfetti } from "./Confetti";
 import { useToast } from "./Toast";
@@ -84,6 +86,13 @@ export function AppShell() {
       toast({ message: `${now} items — your board is thriving!`, icon: <Sparkles size={14} strokeWidth={2.2} />, tone: "gold" });
     }
   }, [items.length, fire, toast]);
+
+  // Quietly check GitHub for a newer release on launch; the UpdateBanner surfaces
+  // one if found. Silent, so before the first published release (feed 404s) or
+  // offline it just no-ops.
+  useEffect(() => {
+    void checkForUpdate(true);
+  }, []);
 
   // Startup reconcile of the Shelf's staged image files. The tray keeps a file's
   // path forever (localStorage), but staged bytes used to live in the OS temp dir
@@ -178,6 +187,7 @@ export function AppShell() {
         <Sidebar />
         <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--board)] shadow-[var(--shadow-shell)]">
           <AccessibilityBanner />
+          <UpdateBanner />
           <TrayNudge />
           <AnimatePresence mode="wait">
             <motion.div

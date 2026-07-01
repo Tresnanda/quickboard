@@ -6,6 +6,13 @@ dist/
 dist-ssr/
 *.local
 
+# Release artifacts assembled by scripts/release.sh (uploaded to GitHub Releases)
+release/
+
+# Updater signing keys must NEVER be committed (they live in ~/.tauri)
+*.key
+*.key.pub
+
 # Rust and Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
