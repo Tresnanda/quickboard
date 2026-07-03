@@ -379,6 +379,32 @@ mod tests {
     use super::*;
     use crate::crypto::new_key;
 
+    /// The one piece of stateful upgrade logic: a pre-`environment` database
+    /// (created by an older build) must open cleanly, gain the column, and
+    /// backfill existing rows with 'Personal' — an existing user's data survives
+    /// the schema migration.
+    #[test]
+    fn migration_adds_environment_column_to_legacy_table() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE items(
+               id TEXT PRIMARY KEY, label TEXT, kind TEXT, category TEXT,
+               confidential INTEGER, pinned INTEGER, body BLOB,
+               created_at INTEGER, updated_at INTEGER, last_used_at INTEGER, use_count INTEGER);
+             INSERT INTO items(id, label, kind, category, confidential, pinned, body,
+               created_at, updated_at, last_used_at, use_count)
+             VALUES ('legacy-1', 'Old note', 'Text', 'Uncategorized', 0, 0, x'00',
+               1700000000, 1700000000, 1700000000, 0);",
+        )
+        .unwrap();
+        let blob_dir = std::env::temp_dir().join(format!("qb-blobs-{}", uuid::Uuid::new_v4()));
+        let clips_path = blob_dir.join("clips.enc");
+        let store = Store::init(conn, new_key(), blob_dir, clips_path).unwrap();
+        let items = store.list().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].environment, "Personal"); // backfilled by the migration
+    }
+
     #[test]
     fn add_then_list_and_decrypt() {
         let key = new_key();

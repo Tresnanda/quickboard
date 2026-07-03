@@ -30,7 +30,7 @@ where
 
 #[tauri::command]
 pub fn list_items(store: State<Mutex<Store>>) -> Result<Vec<Item>, String> {
-    store.lock().unwrap().list()
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).list()
 }
 
 #[tauri::command]
@@ -42,17 +42,17 @@ pub fn add_text_item(
     confidential: bool,
     value: String,
 ) -> Result<String, String> {
-    store.lock().unwrap().add_text(&label, &category, &environment, confidential, &value)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).add_text(&label, &category, &environment, confidential, &value)
 }
 
 #[tauri::command]
 pub fn list_environments(store: State<Mutex<Store>>) -> Result<Vec<String>, String> {
-    store.lock().unwrap().list_environments()
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).list_environments()
 }
 
 #[tauri::command]
 pub fn set_environment(store: State<Mutex<Store>>, id: String, environment: String) -> Result<(), String> {
-    store.lock().unwrap().set_environment(&id, &environment)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).set_environment(&id, &environment)
 }
 
 #[tauri::command]
@@ -65,45 +65,45 @@ pub fn update_item(
     confidential: bool,
     value: Option<String>,
 ) -> Result<(), String> {
-    store.lock().unwrap().update_item(&id, &label, &category, &environment, confidential, value.as_deref())
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).update_item(&id, &label, &category, &environment, confidential, value.as_deref())
 }
 
 #[tauri::command]
 pub async fn get_text_value(store: State<'_, Mutex<Store>>, id: String) -> Result<String, String> {
     // Confidential items require a Touch ID unlock before we decrypt + return.
     // SECURITY: gate_confidential must run before any read of the body.
-    let confidential = { store.lock().unwrap().is_confidential(&id)? };
+    let confidential = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_confidential(&id)? };
     gate_confidential(confidential, require_biometric()).await?;
-    let value = { store.lock().unwrap().get_text(&id)? };
+    let value = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).get_text(&id)? };
     Ok(value)
 }
 
 #[tauri::command]
 pub fn set_pinned(store: State<Mutex<Store>>, id: String, pinned: bool) -> Result<(), String> {
-    store.lock().unwrap().set_pinned(&id, pinned)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).set_pinned(&id, pinned)
 }
 
 #[tauri::command]
 pub fn delete_item(store: State<Mutex<Store>>, id: String) -> Result<(), String> {
-    store.lock().unwrap().delete(&id)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).delete(&id)
 }
 
 #[tauri::command]
 pub fn list_categories(store: State<Mutex<Store>>) -> Result<Vec<String>, String> {
-    store.lock().unwrap().list_categories()
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).list_categories()
 }
 
 /// Persist the clipboard-history buffer, encrypted under the DEK. Callable from
 /// any window (writes originate from main/summon/tray).
 #[tauri::command]
 pub fn clip_history_save(store: State<Mutex<Store>>, json: String) -> Result<(), String> {
-    store.lock().unwrap().save_clips(&json)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).save_clips(&json)
 }
 
 /// Load + decrypt the clipboard-history buffer (JSON array; `"[]"` when absent).
 #[tauri::command]
 pub fn clip_history_load(store: State<Mutex<Store>>) -> Result<String, String> {
-    store.lock().unwrap().load_clips()
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).load_clips()
 }
 
 #[tauri::command]
@@ -113,7 +113,7 @@ pub fn add_file_item(store: State<Mutex<Store>>, label: String, category: String
     let filename = std::path::Path::new(&src_path).file_name()
         .and_then(|s| s.to_str()).unwrap_or("file").to_string();
     let mime = mime_guess_from_name(&filename);
-    store.lock().unwrap().add_file(&label, &category, &environment, confidential, &filename, &mime, &bytes)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).add_file(&label, &category, &environment, confidential, &filename, &mime, &bytes)
 }
 
 fn mime_guess_from_name(name: &str) -> String {
@@ -136,22 +136,22 @@ pub fn read_image_as_data_url(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn rename_category(store: State<Mutex<Store>>, old: String, new: String, environment: Option<String>) -> Result<(), String> {
-    store.lock().unwrap().rename_category(&old, &new, environment.as_deref())
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).rename_category(&old, &new, environment.as_deref())
 }
 
 #[tauri::command]
 pub fn delete_category(store: State<Mutex<Store>>, category: String, environment: Option<String>) -> Result<(), String> {
-    store.lock().unwrap().delete_category(&category, environment.as_deref())
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).delete_category(&category, environment.as_deref())
 }
 
 #[tauri::command]
 pub fn rename_environment(store: State<Mutex<Store>>, old: String, new: String) -> Result<(), String> {
-    store.lock().unwrap().rename_environment(&old, &new)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).rename_environment(&old, &new)
 }
 
 #[tauri::command]
 pub fn delete_environment(store: State<Mutex<Store>>, environment: String, reassign_to: String) -> Result<(), String> {
-    store.lock().unwrap().delete_environment(&environment, &reassign_to)
+    store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).delete_environment(&environment, &reassign_to)
 }
 
 /// Return a file's bytes as a `data:` URL for in-app display (image covers).
@@ -162,9 +162,9 @@ pub fn delete_environment(store: State<Mutex<Store>>, environment: String, reass
 pub async fn get_image_data_url(store: State<'_, Mutex<Store>>, id: String) -> Result<String, String> {
     use base64::Engine as _;
     // SECURITY: gate_confidential must run before any read of the body.
-    let confidential = { store.lock().unwrap().is_confidential(&id)? };
+    let confidential = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_confidential(&id)? };
     gate_confidential(confidential, require_biometric()).await?;
-    let (_filename, mime, bytes) = { store.lock().unwrap().read_file(&id)? };
+    let (_filename, mime, bytes) = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).read_file(&id)? };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:{mime};base64,{b64}"))
 }
@@ -174,9 +174,9 @@ pub async fn file_to_temp(store: State<'_, Mutex<Store>>, app: tauri::AppHandle,
     use tauri::Manager;
     // A confidential file requires a Touch ID unlock before it leaves the vault.
     // SECURITY: gate_confidential must run before any read of the body.
-    let confidential = { store.lock().unwrap().is_confidential(&id)? };
+    let confidential = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_confidential(&id)? };
     gate_confidential(confidential, require_biometric()).await?;
-    let (filename, bytes) = { store.lock().unwrap().read_file_bytes(&id)? };
+    let (filename, bytes) = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).read_file_bytes(&id)? };
     let dir = app.path().temp_dir().map_err(|e| e.to_string())?.join("quickboard-drag");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let p = dir.join(filename);
@@ -196,7 +196,24 @@ fn paste_at_cursor(app: &tauri::AppHandle) -> Result<(), String> {
     app.run_on_main_thread(move || {
         let result = (|| {
             crate::summon::reactivate_prev();
-            std::thread::sleep(std::time::Duration::from_millis(140));
+            // Wait until the remembered app is actually frontmost before synthesizing
+            // ⌘V — activation latency isn't bounded by a fixed sleep (Spaces switches,
+            // heavy apps). Poll in short steps with a hard cap so a stuck activation
+            // can't hang the paste; if no PID was captured, fall back to the old delay.
+            match crate::summon::prev_pid() {
+                Some(target) => {
+                    for _ in 0..20 {
+                        if crate::summon::frontmost_pid() == Some(target) {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                    }
+                    // one settle tick after the app reports frontmost, so its key
+                    // window is ready to receive the synthetic keystroke
+                    std::thread::sleep(std::time::Duration::from_millis(30));
+                }
+                None => std::thread::sleep(std::time::Duration::from_millis(140)),
+            }
 
             use enigo::{Direction, Enigo, Key, Keyboard, Settings};
             let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
@@ -225,9 +242,9 @@ pub fn summon_paste(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn summon_paste_image(store: State<'_, Mutex<Store>>, app: tauri::AppHandle, id: String) -> Result<(), String> {
     // SECURITY: gate_confidential must run before any read of the body.
-    let confidential = { store.lock().unwrap().is_confidential(&id)? };
+    let confidential = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_confidential(&id)? };
     gate_confidential(confidential, require_biometric()).await?;
-    let (_filename, mime, bytes) = { store.lock().unwrap().read_file(&id)? };
+    let (_filename, mime, bytes) = { store.lock().unwrap_or_else(std::sync::PoisonError::into_inner).read_file(&id)? };
     if !mime.starts_with("image/") {
         return Err("item is not an image".to_string());
     }
@@ -540,6 +557,13 @@ pub fn start_clipboard_watch(app: tauri::AppHandle) {
         let mut last_frontmost_app = frontmost_app_name();
         loop {
             std::thread::sleep(std::time::Duration::from_millis(600));
+            // While history is off (the default) the thread stays fully idle — no
+            // AppKit frontmost query, no pasteboard read. Forgetting `last` means the
+            // first poll after re-enable is treated as "pre-existing" and skipped.
+            if !CLIP_WATCH.load(Ordering::Relaxed) {
+                last = -1;
+                continue;
+            }
             let current_frontmost_app = frontmost_app_name();
             // ponytail: stable-app heuristic; omit source if the user switched apps between polls.
             let source_app = if current_frontmost_app == last_frontmost_app { current_frontmost_app.clone() } else { None };
@@ -551,8 +575,8 @@ pub fn start_clipboard_watch(app: tauri::AppHandle) {
             }
             let first = last == -1;
             last = cc;
-            // skip the pre-existing clipboard, and don't read anything when disabled
-            if first || !CLIP_WATCH.load(Ordering::Relaxed) {
+            // skip the pre-existing clipboard (fresh enable or thread start)
+            if first {
                 continue;
             }
             // skip password-manager / transient / auto-generated copies

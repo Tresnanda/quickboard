@@ -16,6 +16,19 @@ pub fn capture_frontmost() {
     *PREV_PID.lock().unwrap() = pid;
 }
 
+/// The PID captured by [`capture_frontmost`], if any.
+#[cfg(target_os = "macos")]
+pub fn prev_pid() -> Option<i32> {
+    *PREV_PID.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// PID of the currently frontmost application.
+#[cfg(target_os = "macos")]
+pub fn frontmost_pid() -> Option<i32> {
+    use objc2_app_kit::NSWorkspace;
+    NSWorkspace::sharedWorkspace().frontmostApplication().map(|app| app.processIdentifier())
+}
+
 /// Re-activate the remembered app so ⌘V (and focus) land back where they were.
 #[cfg(target_os = "macos")]
 pub fn reactivate_prev() {
@@ -197,6 +210,10 @@ pub fn position_traffic_lights(_win: &tauri::WebviewWindow, _x: f64, _y: f64) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn capture_frontmost() {}
+#[cfg(not(target_os = "macos"))]
+pub fn prev_pid() -> Option<i32> { None }
+#[cfg(not(target_os = "macos"))]
+pub fn frontmost_pid() -> Option<i32> { None }
 #[cfg(not(target_os = "macos"))]
 pub fn reactivate_prev() {}
 #[cfg(not(target_os = "macos"))]
