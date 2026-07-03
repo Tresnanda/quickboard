@@ -7,6 +7,7 @@ import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Image as I
 import { useItems } from "../lib/items-store";
 import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage, summonPasteImagePath } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
+import { AUTH_FAIL_MESSAGE, isAuthCancel } from "../lib/confidential-errors";
 import { clipPreview, filterClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
@@ -255,8 +256,16 @@ export function SummonPanel() {
       suppressClipboardCapture(value);
       await navigator.clipboard.writeText(value);
       await invoke("summon_paste");
-    } catch {
-      await invoke("summon_hide");
+    } catch (err) {
+      // Deliberate Touch ID cancel: dismiss the panel as before. A real failure:
+      // keep the panel up and flash why, so the user can try the unlock again.
+      if (isAuthCancel(err)) {
+        await invoke("summon_hide");
+      } else {
+        showFlash(AUTH_FAIL_MESSAGE);
+      }
+    } finally {
+      setBusy(false);
     }
   }
 

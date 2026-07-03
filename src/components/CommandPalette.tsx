@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Search } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { getTextValue } from "../lib/ipc";
+import { useToast } from "./Toast";
+import { AUTH_FAIL_MESSAGE, authFailIcon, isAuthCancel } from "../lib/confidential-errors";
 import { getAppearance } from "../lib/appearance";
 import { ICONS, defaultIcon } from "../lib/icons";
 import { contentType } from "../lib/content-type";
@@ -21,6 +24,8 @@ export function CommandPalette() {
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     if (paletteOpen) {
@@ -48,8 +53,13 @@ export function CommandPalette() {
       try {
         const v = await getTextValue(it.id);
         await navigator.clipboard.writeText(v);
-      } catch {
-        /* cancelled */
+      } catch (err) {
+        // A real unlock failure: keep the palette open so the user can retry,
+        // and say why. A deliberate cancel falls through to the usual close.
+        if (!isAuthCancel(err)) {
+          toast({ message: AUTH_FAIL_MESSAGE, icon: authFailIcon(!!reduce), tone: "rose" });
+          return;
+        }
       }
       setPaletteOpen(false);
     } else {

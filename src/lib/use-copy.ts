@@ -1,7 +1,9 @@
 import { createElement, useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import { Check } from "lucide-react";
 import { getTextValue } from "./ipc";
 import { useToast } from "../components/Toast";
+import { AUTH_FAIL_MESSAGE, authFailIcon, isAuthCancel } from "./confidential-errors";
 
 const COPY_REVERT_MS = 1200;
 
@@ -16,6 +18,7 @@ export function useCopy(itemId: string) {
   const [copied, setCopied] = useState(false);
   const revertTimer = useRef<number | null>(null);
   const toast = useToast();
+  const reduce = useReducedMotion();
 
   useEffect(() => {
     return () => {
@@ -39,8 +42,11 @@ export function useCopy(itemId: string) {
         setCopied(false);
         revertTimer.current = null;
       }, COPY_REVERT_MS);
-    } catch {
-      /* surfaced at a higher level later; copy stays silent for now */
+    } catch (err) {
+      // A deliberate Touch ID cancel stays silent; a real unlock failure speaks.
+      if (!isAuthCancel(err)) {
+        toast({ message: AUTH_FAIL_MESSAGE, icon: authFailIcon(!!reduce), tone: "rose" });
+      }
     }
   }
 
