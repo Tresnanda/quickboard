@@ -6,8 +6,8 @@ import { listen } from "@tauri-apps/api/event";
 import { Sparkles } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { useSettings } from "../lib/settings";
-import { addClip, labelForClipValue, nextPastedImageLabel, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
-import { existingPaths, readImageAsDataUrl, sweepStagedFiles } from "../lib/ipc";
+import { addClip, getClipboard, labelForClipValue, nextPastedImageLabel, shouldSuppressClipboardCapture, shouldSuppressImageCapture } from "../lib/clipboard";
+import { existingPaths, readImageAsDataUrl, sweepStagedFiles, sweepTempFiles } from "../lib/ipc";
 import { getTray, pruneDeadFiles } from "../lib/tray";
 import { Sidebar } from "./Sidebar";
 import { DetailModal } from "./DetailModal";
@@ -108,6 +108,15 @@ export function AppShell() {
         const alive = paths.length ? await existingPaths(paths) : [];
         pruneDeadFiles(new Set(alive));
         await sweepStagedFiles(alive);
+        // Also reclaim plaintext temp files (drag-out decrypts, clipboard image
+        // captures) — nothing else deletes them, and for a confidential item a
+        // lingering decrypt defeats encryption-at-rest. Keep clipboard image
+        // paths and any tray paths still living in the temp dirs.
+        const tempKeep = [
+          ...getClipboard().filter((e) => e.kind === "image" && e.path).map((e) => e.path as string),
+          ...alive.filter((p) => p.includes("quickboard-drag") || p.includes("quickboard-clip")),
+        ];
+        void sweepTempFiles(tempKeep);
       } catch {
         /* best-effort maintenance */
       }

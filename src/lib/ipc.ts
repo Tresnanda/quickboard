@@ -35,6 +35,9 @@ export const persistStagedFile = (path: string, name: string, mime?: string | nu
 export const existingPaths = (paths: string[]) => invoke<string[]>("existing_paths", { paths });
 // Reclaim staged files no longer referenced by the tray (run on startup).
 export const sweepStagedFiles = (keep: string[]) => invoke<number>("sweep_staged_files", { keep });
+// Reclaim plaintext temp files (drag-out decrypts, clipboard captures) no longer
+// referenced by the tray/clipboard (run on startup).
+export const sweepTempFiles = (keep: string[]) => invoke<number>("sweep_temp_files", { keep });
 export const getImageDataUrl = (id: string) => invoke<string>("get_image_data_url", { id });
 export const summonPasteImage = (id: string) => invoke<void>("summon_paste_image", { id });
 export const trayPasteImage = (path: string) => invoke<void>("tray_paste_image", { path });

@@ -447,6 +447,31 @@ fn sweep_dir(root: &std::path::Path, keep: &std::collections::HashSet<String>, g
     removed
 }
 
+/// Like `sweep_dir`, but for a flat layout: remove files directly under `root`
+/// not in `keep` (and older than `grace`); subdirectories are skipped. Best-effort:
+/// per-entry errors are skipped. Returns the count removed.
+fn sweep_flat_dir(root: &std::path::Path, keep: &std::collections::HashSet<String>, grace: std::time::Duration) -> u32 {
+    let mut removed = 0u32;
+    let entries = match std::fs::read_dir(root) {
+        Ok(e) => e,
+        Err(_) => return 0, // no temp dir yet — nothing to reclaim
+    };
+    for f in entries.flatten() {
+        let p = f.path();
+        if p.is_dir() {
+            continue;
+        }
+        let path_str = p.to_string_lossy().to_string();
+        if keep.contains(&path_str) || young(&p, grace) {
+            continue; // referenced, or too fresh to judge — leave it
+        }
+        if std::fs::remove_file(&p).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 /// Delete staged files no longer referenced by the tray. Run on startup: no undo is
 /// pending across a restart, so an unreferenced file is a true orphan. A short mtime
 /// grace spares a file another window staged mid-startup.
@@ -454,6 +479,22 @@ fn sweep_dir(root: &std::path::Path, keep: &std::collections::HashSet<String>, g
 pub fn sweep_staged_files(app: tauri::AppHandle, keep: Vec<String>) -> Result<u32, String> {
     let root = staged_root(&app)?;
     Ok(sweep_dir(&root, &keep.into_iter().collect(), std::time::Duration::from_secs(30)))
+}
+
+/// Delete plaintext temp files (drag-out decrypts, clipboard captures) no
+/// longer referenced by the tray/clipboard. Run on startup; a generous mtime
+/// grace spares files from a drag or capture still in flight.
+#[tauri::command]
+pub fn sweep_temp_files(app: tauri::AppHandle, keep: Vec<String>) -> Result<u32, String> {
+    use tauri::Manager;
+    let keep: std::collections::HashSet<String> = keep.into_iter().collect();
+    let tmp = app.path().temp_dir().map_err(|e| e.to_string())?;
+    let grace = std::time::Duration::from_secs(300);
+    let mut n = sweep_flat_dir(&tmp.join("quickboard-drag"), &keep, grace);
+    // quickboard-clip nests per-capture stamp subdirs — same layout as the
+    // staged dir, so the existing subdir sweeper is the right tool.
+    n += sweep_dir(&tmp.join("quickboard-clip"), &keep, grace);
+    Ok(n)
 }
 
 /// Whether the clipboard-history watcher captures copies. The poll thread runs
@@ -980,5 +1021,53 @@ mod tests {
             .add_text("Nickname", "Personal", "Personal", false, "hi")
             .unwrap();
         assert_eq!(store.is_confidential(&plain), Ok(false));
+    }
+
+    // Note: the quickboard-clip layout (root/<stamp:x>/clip.png) is the same shape
+    // `write_staged` produces, so `sweep_removes_orphans_but_keeps_referenced` above
+    // already proves `sweep_dir` handles it (reaps the orphan stamp subdir, keeps
+    // the referenced one). The tests below cover the flat quickboard-drag layout.
+
+    // A top-level file in a flat temp dir (the quickboard-drag layout).
+    fn write_flat(root: &std::path::Path, name: &str, bytes: &[u8]) -> String {
+        let p = root.join(name);
+        std::fs::write(&p, bytes).unwrap();
+        p.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn sweep_flat_removes_orphans_but_keeps_referenced() {
+        let root = scratch("flat-sweep");
+        let keep = write_flat(&root, "keep.png", b"1");
+        let orphan = write_flat(&root, "orphan.txt", b"2");
+        let set: HashSet<String> = [keep.clone()].into_iter().collect();
+        // grace 0: nothing counts as "young", so the orphan is eligible immediately.
+        assert_eq!(sweep_flat_dir(&root, &set, Duration::ZERO), 1);
+        assert!(std::path::Path::new(&keep).exists());
+        assert!(!std::path::Path::new(&orphan).exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn sweep_flat_grace_spares_fresh_files() {
+        let root = scratch("flat-grace");
+        let fresh = write_flat(&root, "fresh.png", b"3");
+        // a just-written file is too young to reclaim even when unreferenced.
+        assert_eq!(sweep_flat_dir(&root, &HashSet::new(), Duration::from_secs(3600)), 0);
+        assert!(std::path::Path::new(&fresh).exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn sweep_flat_skips_subdirs_and_missing_root() {
+        let root = scratch("flat-skip");
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        let inner = write_flat(&root.join("nested"), "inner.png", b"4");
+        // subdirectories (and their contents) are out of scope for the flat sweep.
+        assert_eq!(sweep_flat_dir(&root, &HashSet::new(), Duration::ZERO), 0);
+        assert!(std::path::Path::new(&inner).exists());
+        // a root that doesn't exist yet is a no-op, not an error.
+        assert_eq!(sweep_flat_dir(&root.join("nope"), &HashSet::new(), Duration::ZERO), 0);
+        std::fs::remove_dir_all(&root).ok();
     }
 }
