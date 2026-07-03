@@ -1,9 +1,14 @@
 // The "Clipboard" lane — a rolling history of what you copy, separate from the
-// curated Shelf. Capture (background monitoring + skipping password copies) lands
-// in a later step; this is the store + reactive binding the lane renders from.
-// Client-side, localStorage-backed, shared across windows (same origin).
+// curated Shelf. It is the single most sensitive data class in the app, so the
+// buffer persists through the Rust side encrypted with the board's DEK — NOT the
+// webview's plaintext localStorage. The in-memory `cache` stays the synchronous
+// source of truth the UI reads; persistence is async + debounced underneath, and
+// cross-window sync rides a Tauri `clips:changed` event instead of `storage`.
 
 import { useSyncExternalStore } from "react";
+import { emit, listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { clipHistoryLoad, clipHistorySave } from "./ipc";
 
 export type ClipEntry = {
   id: string;
@@ -24,29 +29,88 @@ const IMG_SUPPRESS_KEY = "qb_clipboard_img_suppress_v1";
 export const CLIPBOARD_CAP = 100; // rolling buffer — oldest fall off
 const SUPPRESS_TTL_MS = 5000;
 
+const SAVE_DEBOUNCE_MS = 250;
+
 let cache: ClipEntry[] | null = null;
 const listeners = new Set<() => void>();
 
-function read(): ClipEntry[] {
-  if (cache) return cache;
-  let value: ClipEntry[] = [];
+// This window's Tauri label ("main" | "summon" | "tray"), used to (a) ignore our
+// own cross-window echo and (b) gate the one-shot localStorage migration to main.
+function selfLabel(): string {
   try {
-    const parsed = JSON.parse(localStorage.getItem(KEY) || "[]");
-    if (Array.isArray(parsed)) value = parsed;
+    return getCurrentWebviewWindow().label;
   } catch {
-    /* defaults */
+    return "main";
   }
-  cache = value;
-  return value;
+}
+
+// `cache` is the synchronous source of truth. Before the first async hydrate lands
+// (or outside Tauri, e.g. tests) treat a null cache as empty.
+function read(): ClipEntry[] {
+  return cache ?? [];
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+// Persist the current buffer, encrypted, via the Rust side, and tell other windows.
+// Fire-and-forget with a trailing debounce: a force-quit can lose the last quarter
+// second of history — acceptable; do NOT make this synchronous over IPC.
+function scheduleSave(): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    const json = JSON.stringify(cache ?? []);
+    void clipHistorySave(json).catch(() => {
+      /* best-effort persistence */
+    });
+    void emit("clips:changed", { source: selfLabel() }).catch(() => {
+      /* best-effort cross-window nudge */
+    });
+  }, SAVE_DEBOUNCE_MS);
 }
 
 function write(next: ClipEntry[]): void {
   cache = next;
+  listeners.forEach((l) => l());
+  scheduleSave();
+}
+
+// Load the encrypted buffer from Rust into `cache` and notify. `force` re-hydrates
+// even when a cache already exists (used when another window signals a change); the
+// initial load bails if a synchronous write beat it, so it never clobbers fresh state.
+// A decrypt failure (e.g. keychain locked) degrades to an empty lane, never a crash.
+async function hydrate(force = false): Promise<void> {
+  let loaded: ClipEntry[] = [];
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    const parsed = JSON.parse(await clipHistoryLoad());
+    if (Array.isArray(parsed)) loaded = parsed;
   } catch {
-    /* ignore */
+    loaded = [];
   }
+  // One-shot migration off the legacy plaintext localStorage buffer. Only the main
+  // window migrates (writes there aren't 3-way raced), and only on initial hydrate.
+  if (!force && selfLabel() === "main") {
+    try {
+      const legacy = localStorage.getItem(KEY);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length) {
+          const seen = new Set(loaded.map((e) => e.id));
+          const merged = [...loaded, ...parsed.filter((e: ClipEntry) => e && !seen.has(e.id))]
+            .sort((a, b) => b.ts - a.ts)
+            .slice(0, CLIPBOARD_CAP);
+          loaded = merged;
+          void clipHistorySave(JSON.stringify(merged)).catch(() => {});
+        }
+        localStorage.removeItem(KEY);
+      }
+    } catch {
+      /* best-effort migration */
+    }
+  }
+  // A synchronous write may have populated the cache while we awaited the load —
+  // on the initial (non-force) hydrate, don't overwrite it.
+  if (!force && cache !== null) return;
+  cache = loaded;
   listeners.forEach((l) => l());
 }
 
@@ -219,10 +283,13 @@ export function useClipboard(): ClipEntry[] {
 }
 
 if (typeof window !== "undefined") {
-  window.addEventListener("storage", (e) => {
-    if (e.key === KEY || e.key === null) {
-      cache = null;
-      listeners.forEach((l) => l());
-    }
+  // Initial load (each window hydrates its own in-memory cache from the encrypted
+  // buffer; the main window also runs the one-shot localStorage migration).
+  void hydrate();
+  // Cross-window sync: another window persisted a change — re-hydrate ours. Ignore
+  // our own echo so a save doesn't bounce back and clobber newer local state.
+  void listen<{ source?: string }>("clips:changed", (e) => {
+    if (e.payload?.source === selfLabel()) return;
+    void hydrate(true);
   });
 }

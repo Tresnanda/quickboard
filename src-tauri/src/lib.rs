@@ -243,6 +243,8 @@ pub fn run() {
             commands::set_pinned,
             commands::delete_item,
             commands::list_categories,
+            commands::clip_history_save,
+            commands::clip_history_load,
             commands::add_file_item,
             commands::file_to_temp,
             commands::get_image_data_url,

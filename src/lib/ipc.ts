@@ -52,3 +52,7 @@ export const deleteEnvironmentItems = (environment: string, reassignTo: string) 
 export const readImageAsDataUrl = (path: string) => invoke<string>("read_image_as_data_url", { path });
 export const setAutostart = (enabled: boolean) => invoke<void>("set_autostart", { enabled });
 export const getAutostart = () => invoke<boolean>("get_autostart");
+// Clipboard history persists through the Rust side, encrypted with the board's DEK
+// (never plaintext localStorage). Buffer is a JSON array of ClipEntry.
+export const clipHistorySave = (json: string) => invoke<void>("clip_history_save", { json });
+export const clipHistoryLoad = () => invoke<string>("clip_history_load");

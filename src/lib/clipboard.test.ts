@@ -6,6 +6,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClipEntry } from "./clipboard";
 
+// Tauri IPC + events are unavailable under jsdom. Mock the persistence wrappers and
+// the event/window bridge so the module loads and its in-memory behavior can be
+// exercised. `clipHistoryLoad` resolves to an empty buffer by default.
+vi.mock("./ipc", () => ({
+  clipHistoryLoad: vi.fn(() => Promise.resolve("[]")),
+  clipHistorySave: vi.fn(() => Promise.resolve()),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  emit: vi.fn(() => Promise.resolve()),
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: () => ({ label: "main" }),
+}));
+
 async function freshModule() {
   vi.resetModules();
   return import("./clipboard");
@@ -172,5 +187,35 @@ describe("clearClipsSince / restoreClips round-trip", () => {
     const removed = clearClipsSince(150);
     expect(removed.map((c) => c.id)).toEqual(["new"]);
     expect(getClipboard().map((c) => c.id)).toEqual(["old"]);
+  });
+});
+
+describe("encrypted persistence", () => {
+  it("a write schedules clipHistorySave with the buffer after the 250ms debounce", async () => {
+    vi.useFakeTimers();
+    try {
+      const { addClip } = await freshModule();
+      // Import after freshModule so both resolve from the same reset registry.
+      const ipc = await import("./ipc");
+      const save = vi.mocked(ipc.clipHistorySave);
+      save.mockClear();
+
+      addClip({ kind: "text", value: "hello", label: "hello" });
+      // Debounced: nothing persisted synchronously.
+      expect(save).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(250);
+      expect(save).toHaveBeenCalledTimes(1);
+      const persisted = JSON.parse(save.mock.calls[0][0]) as ClipEntry[];
+      expect(persisted[0].value).toBe("hello");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not write the clip buffer to localStorage", async () => {
+    const { addClip } = await freshModule();
+    addClip({ kind: "text", value: "secret", label: "secret" });
+    expect(localStorage.getItem("qb_clipboard_v1")).toBeNull();
   });
 });
