@@ -5,7 +5,8 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Bookmark, Check, CheckCheck, ChevronDown, ClipboardList, CornerDownLeft, Download, FileText, FolderInput, Image as ImageIcon, Inbox, Layers, LayoutGrid, Link2, Lock, MoreHorizontal, Pencil, Plus, Search, StickyNote, Trash2, X, type LucideIcon } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { fileToTemp, getImageDataUrl, getTextValue, persistStagedFile, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
+import { fileToTemp, getTextValue, persistStagedFile, readImageAsDataUrl, stageBlobFile } from "../lib/ipc";
+import { getCachedImageDataUrl } from "../lib/image-cache";
 import { dragMixedOut, dragOutItem, dragPathOut, dragPathsOut, dragTextOut, isDraggingOut } from "../lib/drag";
 import { addLane, addToTray, clearTray, committable, isTrayImageFile, labelForTrayFile, moveToLane, removeFromTray, removeLane, renameLane, restoreTray, useLanes, useTray, type TrayEntry } from "../lib/tray";
 import { clearClipsSince, clipPreview, filterClips, removeClip, restoreClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
@@ -873,7 +874,7 @@ function TrayRow({
     let on = true;
     setThumb(null);
     if (isFileImage && entry.path) void readImageAsDataUrl(entry.path).then((d) => on && setThumb(d)).catch(() => {});
-    else if (isItemImage && item) void getImageDataUrl(item.id).then((d) => on && setThumb(d)).catch(() => {});
+    else if (isItemImage && item) void getCachedImageDataUrl(item.id).then((d) => on && setThumb(d)).catch(() => {});
     return () => {
       on = false;
     };

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
-import { getImageDataUrl, setPinned } from "../lib/ipc";
+import { setPinned } from "../lib/ipc";
+import { getCachedImageDataUrl } from "../lib/image-cache";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
 import { CopyCheck } from "./CopyCheck";
 import { FavoriteButton } from "./FavoriteButton";
@@ -76,7 +77,7 @@ export function ItemCard({ item }: { item: Item }) {
       return;
     }
     let alive = true;
-    void getImageDataUrl(item.id).then((u) => alive && setCover(u)).catch(() => {});
+    void getCachedImageDataUrl(item.id).then((u) => alive && setCover(u)).catch(() => {});
     return () => {
       alive = false;
     };

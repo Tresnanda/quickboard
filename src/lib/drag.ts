@@ -198,6 +198,8 @@ export async function dragOutItem(id: string, isImage: boolean, thumbDataUrl?: s
     // a small generated preview so the OS never QuickLooks the raw file at full size
     let icon: string | null = null;
     if (isImage) {
+      // Deliberately uncached: a confidential-image drag is Touch-ID-gated per
+      // fetch, and caching here would let a second drag skip re-auth.
       const src = thumbDataUrl ?? (await getImageDataUrl(id).catch(() => null));
       if (src) icon = await dragPreview(src);
     }
