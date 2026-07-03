@@ -265,6 +265,7 @@ pub fn run() {
             commands::persist_staged_file,
             commands::existing_paths,
             commands::sweep_staged_files,
+            commands::sweep_temp_files,
             commands::start_multi_drag,
             commands::set_clipboard_watch,
             commands::show_tray,
