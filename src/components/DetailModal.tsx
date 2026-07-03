@@ -11,7 +11,8 @@ import { ICONS, defaultIcon } from "../lib/icons";
 import { CONTENT_TYPE_LABEL, contentType, fileExt } from "../lib/content-type";
 import { useReveal } from "../lib/use-reveal";
 import { useCopy } from "../lib/use-copy";
-import { deleteItem, getImageDataUrl, getTextValue, setPinned } from "../lib/ipc";
+import { deleteItem, getTextValue, setPinned } from "../lib/ipc";
+import { getCachedImageDataUrl, invalidateImage } from "../lib/image-cache";
 import { relativeTime } from "./ItemCard";
 import { CopyCheck } from "./CopyCheck";
 import { FavoriteButton } from "./FavoriteButton";
@@ -76,7 +77,7 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
       return;
     }
     let alive = true;
-    void getImageDataUrl(item.id).then((u) => alive && setCover(u)).catch(() => {});
+    void getCachedImageDataUrl(item.id).then((u) => alive && setCover(u)).catch(() => {});
     return () => {
       alive = false;
     };
@@ -86,6 +87,7 @@ function Body({ item, onClose }: { item: Item; onClose: () => void }) {
     if (getSettings().confirmDelete && !(await confirm({ title: "Delete this item?", message: `“${item.label}” will be permanently removed.`, confirmLabel: "Delete", tone: "danger" }))) return;
     try {
       await deleteItem(item.id);
+      invalidateImage(item.id);
       toast({ message: "Item deleted", icon: <Trash2 size={14} strokeWidth={2.2} />, tone: "rose" });
       onClose();
       await reload();

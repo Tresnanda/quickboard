@@ -5,7 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Image as ImageIcon, Link2, Plus, Search, StickyNote } from "lucide-react";
 import { useItems } from "../lib/items-store";
-import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage, summonPasteImagePath } from "../lib/ipc";
+import { addFile, addText, getTextValue, summonPasteImage, summonPasteImagePath } from "../lib/ipc";
+import { getCachedImageDataUrl } from "../lib/image-cache";
 import { addToTray } from "../lib/tray";
 import { clipPreview, filterClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
@@ -603,7 +604,7 @@ function ResultRow({ item, active, onClick, onHover }: { item: Item; active: boo
       return;
     }
     let alive = true;
-    void getImageDataUrl(item.id).then((u) => alive && setThumb(u)).catch(() => {});
+    void getCachedImageDataUrl(item.id).then((u) => alive && setThumb(u)).catch(() => {});
     return () => {
       alive = false;
     };

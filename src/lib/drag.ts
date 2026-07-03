@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
-import { fileToTemp, getImageDataUrl, readImageAsDataUrl } from "./ipc";
+import { fileToTemp, readImageAsDataUrl } from "./ipc";
+import { getCachedImageDataUrl } from "./image-cache";
 
 // A native drag (start_multi_drag) reports completion via a single "drag:end" event.
 // Only the window that started a drag has a pending finisher, so the broadcast is safe.
@@ -198,7 +199,7 @@ export async function dragOutItem(id: string, isImage: boolean, thumbDataUrl?: s
     // a small generated preview so the OS never QuickLooks the raw file at full size
     let icon: string | null = null;
     if (isImage) {
-      const src = thumbDataUrl ?? (await getImageDataUrl(id).catch(() => null));
+      const src = thumbDataUrl ?? (await getCachedImageDataUrl(id).catch(() => null));
       if (src) icon = await dragPreview(src);
     }
     if (!icon) icon = await fileDragPreview(name);

@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import { ProfileEditor } from "../components/ProfileEditor";
 import { Avatar } from "../components/Avatar";
 import { Select } from "../components/Select";
+import { clearImageCache } from "../lib/image-cache";
 import { deleteItem, getAutostart, getTextValue, setAutostart } from "../lib/ipc";
 import { cn } from "../lib/utils";
 
@@ -86,6 +87,7 @@ export function Settings() {
           /* best-effort */
         }
       }
+      clearImageCache();
       await reload();
       toast({ message: "All data cleared", icon: <Trash2 size={14} strokeWidth={2.2} />, tone: "rose" });
     } finally {

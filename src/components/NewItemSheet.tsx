@@ -9,6 +9,7 @@ import { useConfetti } from "./Confetti";
 import { useMintFlight } from "./MintFlight";
 import { Combobox } from "./Combobox";
 import { addFile, addText, getTextValue, updateItem } from "../lib/ipc";
+import { invalidateImage } from "../lib/image-cache";
 import { getAppearance, setAppearance } from "../lib/appearance";
 import { CONTENT_TYPE_LABEL, contentType } from "../lib/content-type";
 import { coverGradient, coverColors } from "../lib/cover";
@@ -121,6 +122,7 @@ export function NewItemSheet() {
       let newId: string | null = null;
       if (editItem) {
         await updateItem(editItem.id, label.trim(), category.trim(), environment.trim(), confidential, backing === "text" ? value : null);
+        invalidateImage(editItem.id);
         setAppearance(editItem.id, { type, ...(tint ? { tint } : {}) });
       } else {
         newId =
