@@ -177,13 +177,12 @@ export function Onboarding() {
             </motion.button>
           )}
 
-          {/* The beat column scrolls inside this window instead of sliding under the
-              bottom chrome. The clearance bands (pt = Skip, pb = dots) live on the
-              CONTENT, not the scroller — WKWebView drops a scroll container's own
-              bottom padding once content overflows. */}
-          <div className="relative z-10 flex h-full min-h-0 w-full max-w-[520px] flex-col items-center overflow-y-auto px-8">
+          {/* The beat column gets the window height MINUS the dots row below — the
+              dots live in normal flow, so no beat can ever slide under them; a
+              too-tall beat scrolls inside its own band instead. */}
+          <div className="relative z-10 flex w-full min-h-0 flex-1 max-w-[520px] flex-col items-center overflow-y-auto px-8">
             <AnimatePresence mode="wait" custom={dir}>
-              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="my-auto flex w-full flex-col items-center pb-24 pt-16 text-center">
+              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="my-auto flex w-full flex-col items-center pb-6 pt-14 text-center">
                 {beat === 0 && <Hello onNext={() => go(1)} />}
                 {beat === 1 && <SaveBeat onSaved={(item) => { setSaved(item); void reload(); go(1); }} />}
                 {beat === 2 && <SummonBeat item={saved} onNext={() => go(1)} />}
@@ -194,8 +193,9 @@ export function Onboarding() {
             </AnimatePresence>
           </div>
 
-          {/* progress dots */}
-          <div className="absolute bottom-7 z-10 flex items-center gap-2">
+          {/* progress dots — a normal-flow row, so it always owns its own band
+              below the beat column and can never be overlapped */}
+          <div className="relative z-10 flex h-16 shrink-0 items-center gap-2">
             {Array.from({ length: BEATS }).map((_, i) => (
               <motion.span key={i} animate={{ width: i === beat ? 24 : 7, backgroundColor: i === beat ? "#1f2024" : "rgba(31,32,36,0.16)" }} transition={SETTLE} className="h-[7px] rounded-full" />
             ))}
