@@ -16,7 +16,7 @@ import { motion, type Transition } from "framer-motion";
 import { Fingerprint } from "lucide-react";
 
 /** Shared copy for a genuine (non-cancel) Touch ID failure. */
-export const AUTH_FAIL_MESSAGE = "Couldn't unlock — try again";
+export const AUTH_FAIL_MESSAGE = "Couldn't unlock. Try again";
 
 /**
  * True when the user deliberately dismissed the Touch ID prompt.

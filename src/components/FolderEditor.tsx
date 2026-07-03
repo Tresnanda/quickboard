@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -8,7 +8,8 @@ import { clearAppearance, getAppearance, setAppearance, useAppearance } from "..
 import { deleteCategory, readImageAsDataUrl, renameCategory } from "../lib/ipc";
 import { TINTS, TINT_NAMES } from "../lib/tints";
 import { coverColors, coverGradient } from "../lib/cover";
-import ShaderHeader from "./ShaderHeader";
+// lazy so three.js stays out of app startup — loads on first modal open
+const ShaderHeader = lazy(() => import("./ShaderHeader"));
 import { ImageCropper } from "./ImageCropper";
 import { useToast } from "./Toast";
 import { useConfirm } from "./ConfirmDialog";
@@ -104,7 +105,7 @@ export function FolderEditor({ folder, onClose }: { folder: string | null; onClo
 
                   {/* live preview */}
                   <div className="relative h-[100px] overflow-hidden rounded-[var(--r-inner)]" style={{ background: cover ? "var(--t-tile)" : coverGradient(folder, tint) }}>
-                    {cover ? <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <ShaderHeader color1={sg[0]} color2={sg[1]} color3={sg[2]} />}
+                    {cover ? <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <Suspense fallback={null}><ShaderHeader color1={sg[0]} color2={sg[1]} color3={sg[2]} /></Suspense>}
                     <Dialog.Close className="qb-press absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full bg-white/70 text-[#52525b] backdrop-blur-sm" aria-label="Close">
                       <X size={15} />
                     </Dialog.Close>

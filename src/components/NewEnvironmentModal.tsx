@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, Trash2, X } from "lucide-react";
@@ -7,7 +7,8 @@ import { addEnvironment, removeEnvironment } from "../lib/environments";
 import { clearAppearance, getAppearance, setAppearance } from "../lib/appearance";
 import { deleteEnvironmentItems, renameEnvironmentItems } from "../lib/ipc";
 import { coverColors, coverGradient } from "../lib/cover";
-import ShaderHeader from "./ShaderHeader";
+// lazy so three.js stays out of app startup — loads on first modal open
+const ShaderHeader = lazy(() => import("./ShaderHeader"));
 import { ICONS, type IconName } from "../lib/icons";
 import { TINTS, TINT_NAMES, type TintName } from "../lib/tints";
 import { useToast } from "./Toast";
@@ -117,7 +118,9 @@ export function NewEnvironmentModal({ open, edit, onClose }: { open: boolean; ed
 
                   {/* live ShaderGradient header — same as New Item */}
                   <div className="relative h-[150px] shrink-0 overflow-hidden rounded-[var(--r-inner)]" style={{ background: coverGradient("environment", tint) }}>
-                    <ShaderHeader color1={sgColors[0]} color2={sgColors[1]} color3={sgColors[2]} />
+                    <Suspense fallback={null}>
+                      <ShaderHeader color1={sgColors[0]} color2={sgColors[1]} color3={sgColors[2]} />
+                    </Suspense>
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3" style={{ background: "linear-gradient(to top, rgba(255,255,255,0.5), rgba(255,255,255,0.12) 46%, transparent 78%)" }} />
                     <Dialog.Close className="qb-press absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full bg-white/70 text-[#52525b] backdrop-blur-sm" aria-label="Close">
                       <X size={15} />

@@ -32,7 +32,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={push}>
       {children}
       {createPortal(
-        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[150] flex flex-col items-center gap-2">
+        <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-5 z-[150] flex flex-col items-center gap-2">
           <AnimatePresence>
             {toasts.map((t) => (
               <motion.div

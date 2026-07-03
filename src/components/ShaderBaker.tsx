@@ -1,5 +1,8 @@
-import { Component, createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react";
+import { Component, createContext, lazy, Suspense, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+// The GL canvas (and with it three.js / @shadergradient) loads lazily on the
+// first bake, keeping the heaviest deps out of the main window's startup path.
+const BakerCanvas = lazy(() => import("./ShaderBakerCanvas"));
 
 type Colors = [string, string, string];
 type Job = { key: string; colors: Colors; uTime: number; resolve: (url: string | null) => void };
@@ -71,6 +74,15 @@ export function ShaderBakerProvider({ children }: { children: ReactNode }) {
   const run = useCallback(async () => {
     if (running.current) return;
     running.current = true;
+    // Ensure the lazy GL chunk is fully loaded BEFORE mounting: the miss counter
+    // below must measure blank GL buffers, not module-loading latency.
+    try {
+      await import("./ShaderBakerCanvas");
+    } catch {
+      setDisabled(true);
+      running.current = false;
+      return;
+    }
     setMounted(true);
     await waitFrames(3); // let the canvas mount + compile
     let misses = 0;
@@ -127,37 +139,9 @@ export function ShaderBakerProvider({ children }: { children: ReactNode }) {
       <div ref={hostRef} aria-hidden style={{ position: "fixed", left: -99999, top: -99999, width: W, height: H, opacity: 0, pointerEvents: "none" }}>
         {mounted && (
           <GLBoundary onError={() => setDisabled(true)}>
-            <ShaderGradientCanvas preserveDrawingBuffer lazyLoad={false} pointerEvents="none" style={{ width: W, height: H }}>
-              <ShaderGradient
-                type="plane"
-                animate="off"
-                uTime={current.uTime}
-                uSpeed={0.4}
-                uStrength={3.6}
-                uDensity={1.3}
-                uFrequency={5.5}
-                uAmplitude={1}
-                brightness={1.25}
-                cAzimuthAngle={180}
-                cPolarAngle={90}
-                cDistance={3.6}
-                cameraZoom={1}
-                positionX={-1.4}
-                positionY={0}
-                positionZ={0}
-                rotationX={0}
-                rotationY={10}
-                rotationZ={50}
-                reflection={0.1}
-                envPreset="city"
-                lightType="3d"
-                grain="off"
-                shader="defaults"
-                color1={current.colors[0]}
-                color2={current.colors[1]}
-                color3={current.colors[2]}
-              />
-            </ShaderGradientCanvas>
+            <Suspense fallback={null}>
+              <BakerCanvas colors={current.colors} uTime={current.uTime} width={W} height={H} />
+            </Suspense>
           </GLBoundary>
         )}
       </div>
