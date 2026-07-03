@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, type Variants } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowRight, Check, Clipboard, Link2, Power, StickyNote, Zap } from "lucide-react";
+import { ArrowRight, Check, Clipboard, Layers, Link2, Power, StickyNote, Zap } from "lucide-react";
 import { useConfetti } from "./Confetti";
 import { addText, getAutostart, setAutostart } from "../lib/ipc";
 import { setSetting, useSettings } from "../lib/settings";
 import { useItems } from "../lib/items-store";
 
 const FLAG = "qb_onboarded_v1";
-const BEATS = 5;
+const BEATS = 6;
 
 // custom curves (emil: built-ins are too weak)
 const OUT = [0.23, 1, 0.32, 1] as const; // strong ease-out — entrances
@@ -183,8 +183,9 @@ export function Onboarding() {
                 {beat === 0 && <Hello onNext={() => go(1)} />}
                 {beat === 1 && <SaveBeat onSaved={(item) => { setSaved(item); void reload(); go(1); }} />}
                 {beat === 2 && <SummonBeat item={saved} onNext={() => go(1)} />}
-                {beat === 3 && <SetupBeat onNext={() => go(1)} />}
-                {beat === 4 && <Finish item={saved} onDone={finish} />}
+                {beat === 3 && <TrayBeat item={saved} onNext={() => go(1)} />}
+                {beat === 4 && <SetupBeat onNext={() => go(1)} />}
+                {beat === 5 && <Finish item={saved} onDone={finish} />}
               </motion.div>
             </AnimatePresence>
           </div>
@@ -469,6 +470,135 @@ function SummonBeat({ item, onNext }: { item: { name: string; value: string }; o
           <button onClick={onNext} className="mt-7 text-[12.5px] font-medium text-[#9a93a8] transition-colors hover:text-[#1f2024]">
             Skip for now
           </button>
+        </Rise>
+      )}
+    </>
+  );
+}
+
+// a compact, alive rendering of the real tray: two lanes with chips that cascade in
+function TrayGlyph({ shown, first }: { shown: boolean; first: { name: string; value: string } }) {
+  const reduce = useReducedMotion();
+  const lanes = [
+    { label: "Shelf", Icon: Layers, chips: [first.name || "First note", "Logo.png"] },
+    { label: "Clipboard", Icon: Clipboard, chips: ["meet.google.com/abc-defg", "you@company.com"] },
+  ];
+  return (
+    <motion.div
+      className="relative w-[300px] rounded-[16px] border border-black/[0.06] bg-white/85 p-2.5 text-left backdrop-blur"
+      style={{ boxShadow: "0 18px 40px -18px rgba(0,0,0,0.42)", willChange: "transform" }}
+      animate={reduce ? undefined : shown ? { y: 0, scale: [1, 0.985, 1.01, 1] } : { y: [0, -4, 0] }}
+      transition={shown ? { duration: 0.5, ease: OUT } : { duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+    >
+      {/* delight when the real tray is summoned: a portal ring + light bloom behind the glyph */}
+      <AnimatePresence>
+        {shown && !reduce && (
+          <>
+            <motion.span key="bloom" className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-56 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white blur-2xl" initial={{ opacity: 0.9, scale: 0.4 }} animate={{ opacity: 0, scale: 1.6 }} transition={{ duration: 0.7, ease: OUT }} />
+            {[0, 1].map((i) => (
+              <motion.span key={`ring-${i}`} className="pointer-events-none absolute inset-0 -z-10 rounded-[16px] border border-[#b9a6e8]" initial={{ scale: 0.9, opacity: 0.55 }} animate={{ scale: 1.14 + i * 0.1, opacity: 0 }} transition={{ duration: 0.7 + i * 0.12, ease: OUT, delay: i * 0.05 }} />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="flex flex-col gap-2">
+        {lanes.map((lane, li) => (
+          <motion.div
+            key={lane.label}
+            className="rounded-[12px] bg-[#f6f4fb] p-2"
+            animate={{ backgroundColor: shown ? "#efe9fb" : "#f6f4fb" }}
+            transition={{ duration: 0.5, ease: OUT }}
+          >
+            <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-[#9a93a8]">
+              <lane.Icon size={11} strokeWidth={2.4} /> {lane.label}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {lane.chips.map((chip, ci) => {
+                const isUrl = /^(https?:\/\/|www\.|[\w.-]+\.\w{2,})/i.test(chip) && !chip.includes(" ");
+                const ChipIcon = ci === 0 && li === 0 ? StickyNote : isUrl ? Link2 : StickyNote;
+                return (
+                  <motion.div
+                    key={chip}
+                    className="flex items-center gap-2 rounded-[9px] border border-black/[0.05] bg-white px-2 py-1.5"
+                    style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
+                    initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0.01px)" }}
+                    transition={{ duration: 0.42, ease: OUT, delay: 0.18 + (li * 2 + ci) * 0.07 }}
+                  >
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-[7px] bg-[#efe9fb] text-[#6b4ea8]">
+                      <ChipIcon size={11} strokeWidth={2} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium tracking-[-0.008em] text-[#1f2024]">{chip}</span>
+                    {li === 1 && ci === 0 && (
+                      <motion.span
+                        className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[#3f7a57] text-white"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: shown ? 1 : 0, opacity: shown ? 1 : 0 }}
+                        transition={{ type: "spring", stiffness: 520, damping: 14, delay: 0.24 }}
+                      >
+                        <Check size={9} strokeWidth={3.4} />
+                      </motion.span>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+function TrayBeat({ item, onNext }: { item: { name: string; value: string }; onNext: () => void }) {
+  const [shown, setShown] = useState(false);
+
+  function showMe() {
+    void invoke("show_tray");
+    setShown(true);
+  }
+
+  return (
+    <>
+      {/* keyboard hint: ⌥⇧Space — nudges up while idle, squashes on summon */}
+      <motion.div variants={rise} className="relative flex items-center gap-1.5">
+        <AnimatePresence>
+          {shown && <motion.span key="kr" className="pointer-events-none absolute -inset-5 rounded-[20px] ring-2 ring-[#b9a6e8]" initial={{ scale: 0.85, opacity: 0.85 }} animate={{ scale: 1.45, opacity: 0 }} transition={{ duration: 0.55, ease: OUT }} />}
+        </AnimatePresence>
+        <motion.div className="flex items-center gap-1.5" animate={shown ? { scaleY: [1, 0.76, 1], y: [0, 5, 0] } : { y: [0, -6, 0] }} transition={shown ? { duration: 0.42, ease: OUT } : { duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+          <Keycap>⌥</Keycap>
+          <span className="text-[18px] font-bold text-[#b3adbf]">+</span>
+          <Keycap>⇧</Keycap>
+          <span className="text-[18px] font-bold text-[#b3adbf]">+</span>
+          <Keycap wide>Space</Keycap>
+        </motion.div>
+      </motion.div>
+
+      <Rise className="mt-7 text-[24px] font-extrabold tracking-[-0.03em] text-[#1f2024]">
+        <AnimatePresence mode="wait">
+          <motion.span key={shown ? "open" : "intro"} initial={{ opacity: 0, y: 8, filter: "blur(5px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -6, filter: "blur(5px)" }} transition={{ duration: 0.26, ease: OUT }} className="inline-block">
+            {shown ? "There's your tray" : "A place to gather"}
+          </motion.span>
+        </AnimatePresence>
+      </Rise>
+      <Rise className="mt-1.5 max-w-[400px] text-[13.5px] leading-relaxed text-[#6b6577]">
+        {shown
+          ? "It floats beside your work. Sort things into lanes, then send a whole lane to your board in one step."
+          : "The tray is a staging area. Drop in files and images from anywhere, sort them into lanes, then commit a lane to your board in one step."}
+      </Rise>
+
+      <Rise className="mt-6">
+        <TrayGlyph shown={shown} first={item} />
+      </Rise>
+
+      {shown ? (
+        <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ ...POP, delay: 0.18 }}>
+          <PrimaryButton onClick={onNext}>Got it</PrimaryButton>
+        </motion.div>
+      ) : (
+        <Rise>
+          <PrimaryButton onClick={showMe}>Show me</PrimaryButton>
         </Rise>
       )}
     </>

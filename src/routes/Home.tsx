@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { invoke } from "@tauri-apps/api/core";
 import { SlotText } from "slot-text/react";
-import { ArrowLeft, Check, ChevronDown, Code, FileText, Image as ImageIcon, Link as LinkIcon, Plus, Search, SlidersHorizontal, StickyNote } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Code, FileText, Image as ImageIcon, Layers, Link as LinkIcon, Plus, Search, SlidersHorizontal, StickyNote } from "lucide-react";
 import { useItems } from "../lib/items-store";
 import { CONTENT_TYPE_LABEL, contentType } from "../lib/content-type";
 import type { ContentType, Item } from "../lib/types";
@@ -223,6 +224,8 @@ export function Home() {
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
+
+          <TrayButton />
         </div>
       </header>
 
@@ -279,6 +282,58 @@ function ItemList({ items }: { items: Item[] }) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--fainter)]">{children}</div>;
+}
+
+// Persistent affordance for the floating tray. First-run: a quiet ink pulse
+// invites discovery; it clears the moment the button is used.
+const TRAY_SEEN = "qb_tray_seen_v1";
+
+function TrayButton() {
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (!localStorage.getItem(TRAY_SEEN)) setPulse(true);
+  }, []);
+
+  function open() {
+    if (pulse) {
+      localStorage.setItem(TRAY_SEEN, "1");
+      setPulse(false);
+    }
+    void invoke("show_tray");
+  }
+
+  return (
+    <motion.button
+      type="button"
+      onClick={open}
+      title="Show tray (⌥⇧Space)"
+      aria-label="Show tray"
+      initial="rest"
+      whileHover="hover"
+      whileTap={{ scale: 0.96 }}
+      variants={{ rest: { y: 0 }, hover: { y: -1 } }}
+      transition={{ type: "spring", stiffness: 460, damping: 30 }}
+      className="relative flex h-[34px] shrink-0 items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-white px-2.5 text-[12px] font-medium text-[#54545c] outline-none hover:bg-black/[0.02]"
+    >
+      <Layers size={13} className="text-[#84848c]" />
+      Tray
+      <AnimatePresence>
+        {pulse && (
+          <motion.span
+            key="pulse"
+            className="absolute -right-1 -top-1 grid h-3 w-3 place-items-center"
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 500, damping: 20 }}
+          >
+            <span className="absolute h-full w-full rounded-full bg-[var(--ink)]/25 motion-safe:animate-ping" />
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--ink)]" />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
 }
 
 const EMPTY_ITEM: Variants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transition: { duration: 0.42, ease: [0.23, 1, 0.32, 1] } } };
