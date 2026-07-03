@@ -795,9 +795,11 @@ pub fn show_tray(app: tauri::AppHandle) -> Result<(), String> {
             crate::summon::position_tray(&w);
             let _ = w.show();
             crate::summon::order_front(&w);
-            // replay the entrance only when it was actually hidden
+            // replay the entrance only when it was actually hidden. App-global (not
+            // window-scoped) so the onboarding in the main window can react too —
+            // same pattern as `summon:open`.
             if !was_visible {
-                let _ = w.emit("tray:open", ());
+                let _ = w.app_handle().emit("tray:open", ());
             }
         });
     }
