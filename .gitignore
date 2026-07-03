@@ -29,3 +29,6 @@ pnpm-debug.log*
 .DS_Store
 .idea/
 *.sw?
+
+# Claude Code session state (worktrees, local settings)
+.claude/

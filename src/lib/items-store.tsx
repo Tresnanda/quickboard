@@ -117,7 +117,9 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   // skip self-originated broadcasts — the emitting window already reloaded
   // locally after its own mutation.
   const reloadRef = useRef(reload);
-  reloadRef.current = reload;
+  useEffect(() => {
+    reloadRef.current = reload;
+  }, [reload]);
   useEffect(() => {
     const label = getCurrentWebviewWindow().label;
     const debouncedReload = makeTrailingDebounce(() => void reloadRef.current(), 80);

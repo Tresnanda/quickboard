@@ -243,7 +243,6 @@ export function TrayDock() {
       window.removeEventListener("dragleave", onLeave, true);
       window.removeEventListener("drop", onDropEv, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Board browser: saved items in the chosen env, filtered to the picked categories,

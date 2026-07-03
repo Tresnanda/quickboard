@@ -17,6 +17,17 @@ PUBLISH="${1:-}"
 [ -f "$KEY" ] || { echo "ERROR: signing key not found at $KEY (see docs/RELEASING.md)"; exit 1; }
 
 VERSION="$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")"
+
+# The three version manifests must agree (AGENTS.md release rule) — a partial bump
+# ships an artifact whose internal metadata disagrees with the updater feed.
+PKG_VERSION="$(node -p "require('$ROOT/package.json').version")"
+CARGO_VERSION="$(grep -m1 '^version = ' "$ROOT/src-tauri/Cargo.toml" | sed 's/version = "\(.*\)"/\1/')"
+if [ "$VERSION" != "$PKG_VERSION" ] || [ "$VERSION" != "$CARGO_VERSION" ]; then
+  echo "ERROR: version mismatch — tauri.conf.json=$VERSION package.json=$PKG_VERSION Cargo.toml=$CARGO_VERSION"
+  echo "Bump all three (plus Cargo.lock via 'cargo check') before releasing."
+  exit 1
+fi
+
 TAG="v$VERSION"
 echo "==> Building quickboard $TAG"
 
