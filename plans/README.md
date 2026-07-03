@@ -40,7 +40,43 @@ REJECTED (with one-line rationale).
   most urgent fix in the set (silent total-data-loss path).
 - 008 + 009 compound: full perf win requires both.
 
-## Audited but not planned (real findings, awaiting owner selection)
+## Additional findings — resolved 2026-07-03 (post-merge hardening pass)
+
+All plans 001–011 are merged into main. The following unplanned findings were
+then fixed directly (owner-authorized):
+
+- Store mutex poisoning: every `store.lock().unwrap()` now recovers via
+  `PoisonError::into_inner` — one panic no longer bricks all commands.
+- 140ms paste sleep: replaced with a frontmost-PID poll (20ms steps, 400ms
+  cap, 30ms settle) with the old delay as fallback when no PID was captured.
+  **Needs a manual paste smoke-test** (timing-sensitive).
+- Idle clipboard poll: with history off, the 600ms thread wakes but performs
+  zero AppKit/pasteboard calls; re-enable still skips the pre-existing copy.
+- Store schema migration: now covered by a legacy-table test.
+- Toast container: `role="status"` + `aria-live="polite"`.
+- three.js/@shadergradient: fully lazy (baker canvas split into its own
+  chunk, ShaderHeader lazy in all three modals) — the 1.1MB GL chunk left
+  the main entry; verified via build output.
+- `csp: null` → restrictive CSP in tauri.conf.json. **Needs a runtime
+  smoke-test in all three windows** (one-line revert if anything breaks).
+- ESLint flat-config baseline (`pnpm lint`, in CI): 0 errors; the react-hooks
+  v7 opinionated rules are warnings pending refactors.
+- release.sh now aborts on version drift across the three manifests.
+- CONTEXT.md + docs/adr/ created (CLAUDE.md/AGENTS.md refs now resolve).
+- Dead `src/lib/commit-tray.ts` removed; 004's em-dash copy reworded.
+- ⌘N hint: already present on the Sidebar "New item" button — stale finding.
+
+## Deliberately not done (needs owner decision / prerequisite work)
+
+- TrayDock decomposition, ItemCard/ItemRow dedupe, commands.rs module split —
+  large behavior-preserving refactors; land characterization tests first.
+- ItemsContext split (per-keystroke re-renders) — meaningful surgery across
+  18 consumers; do alongside the TrayDock work.
+- Password-copy heuristics beyond the concealed-type markers — false-positive
+  trade-off is a product call (history is opt-in and now encrypted).
+- Prettier / formatting pass — pure churn; adopt only if wanted.
+
+## Audited but not planned (original list, superseded by the section above)
 
 - Password-manager skip relies on voluntary NSPasteboard concealed markers
   (`commands.rs:493-507`) — partially mitigated by plan 007; heuristics risk
