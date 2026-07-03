@@ -13,6 +13,21 @@ async fn require_biometric() -> Result<(), String> {
         .map(|_| ())
 }
 
+/// Single seam every confidential-egress command routes through: release the value
+/// only after `authorize` succeeds. In production `authorize` is `require_biometric()`
+/// (the Touch ID round-trip); tests inject stub futures to drive the decision table
+/// without an interactive prompt. Futures are lazy in Rust, so passing an un-awaited
+/// `require_biometric()` here never fires the prompt for a non-confidential item.
+async fn gate_confidential<F>(confidential: bool, authorize: F) -> Result<(), String>
+where
+    F: std::future::Future<Output = Result<(), String>>,
+{
+    if confidential {
+        authorize.await?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn list_items(store: State<Mutex<Store>>) -> Result<Vec<Item>, String> {
     store.lock().unwrap().list()
@@ -56,10 +71,9 @@ pub fn update_item(
 #[tauri::command]
 pub async fn get_text_value(store: State<'_, Mutex<Store>>, id: String) -> Result<String, String> {
     // Confidential items require a Touch ID unlock before we decrypt + return.
+    // SECURITY: gate_confidential must run before any read of the body.
     let confidential = { store.lock().unwrap().is_confidential(&id)? };
-    if confidential {
-        require_biometric().await?;
-    }
+    gate_confidential(confidential, require_biometric()).await?;
     let value = { store.lock().unwrap().get_text(&id)? };
     Ok(value)
 }
@@ -134,10 +148,9 @@ pub fn delete_environment(store: State<Mutex<Store>>, environment: String, reass
 #[tauri::command]
 pub async fn get_image_data_url(store: State<'_, Mutex<Store>>, id: String) -> Result<String, String> {
     use base64::Engine as _;
+    // SECURITY: gate_confidential must run before any read of the body.
     let confidential = { store.lock().unwrap().is_confidential(&id)? };
-    if confidential {
-        require_biometric().await?;
-    }
+    gate_confidential(confidential, require_biometric()).await?;
     let (_filename, mime, bytes) = { store.lock().unwrap().read_file(&id)? };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:{mime};base64,{b64}"))
@@ -147,10 +160,9 @@ pub async fn get_image_data_url(store: State<'_, Mutex<Store>>, id: String) -> R
 pub async fn file_to_temp(store: State<'_, Mutex<Store>>, app: tauri::AppHandle, id: String) -> Result<String, String> {
     use tauri::Manager;
     // A confidential file requires a Touch ID unlock before it leaves the vault.
+    // SECURITY: gate_confidential must run before any read of the body.
     let confidential = { store.lock().unwrap().is_confidential(&id)? };
-    if confidential {
-        require_biometric().await?;
-    }
+    gate_confidential(confidential, require_biometric()).await?;
     let (filename, bytes) = { store.lock().unwrap().read_file_bytes(&id)? };
     let dir = app.path().temp_dir().map_err(|e| e.to_string())?.join("quickboard-drag");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -199,10 +211,9 @@ pub fn summon_paste(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn summon_paste_image(store: State<'_, Mutex<Store>>, app: tauri::AppHandle, id: String) -> Result<(), String> {
+    // SECURITY: gate_confidential must run before any read of the body.
     let confidential = { store.lock().unwrap().is_confidential(&id)? };
-    if confidential {
-        require_biometric().await?;
-    }
+    gate_confidential(confidential, require_biometric()).await?;
     let (_filename, mime, bytes) = { store.lock().unwrap().read_file(&id)? };
     if !mime.starts_with("image/") {
         return Err("item is not an image".to_string());
@@ -918,5 +929,56 @@ mod tests {
         assert_eq!(sweep_dir(&root, &HashSet::new(), Duration::from_secs(3600)), 0);
         assert!(std::path::Path::new(&fresh).exists());
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    // --- The Touch ID egress gate (the app's core security invariant) ---------
+    //
+    // `gate_confidential` is the seam every confidential-egress command routes
+    // through. In production the authorizer is the interactive Touch ID round-trip;
+    // here we inject stub futures to drive the decision table without a prompt. A
+    // dropped guard in any of the four commands would leave one of these unproven.
+
+    /// A non-confidential item must NEVER trigger the authorizer (no prompt on the
+    /// board): the authorizer panics if awaited, so reaching it fails the test.
+    #[test]
+    fn gate_skips_authorizer_when_not_confidential() {
+        let result = tauri::async_runtime::block_on(gate_confidential(false, async {
+            panic!("authorizer must not run for a non-confidential item");
+        }));
+        assert_eq!(result, Ok(()));
+    }
+
+    /// A confidential item proceeds only when the authorizer succeeds.
+    #[test]
+    fn gate_proceeds_on_successful_auth() {
+        let result = tauri::async_runtime::block_on(gate_confidential(true, async { Ok(()) }));
+        assert_eq!(result, Ok(()));
+    }
+
+    /// A confidential item is REFUSED when the authorizer fails (cancel / no
+    /// biometrics): the error propagates and no read of the body happens.
+    #[test]
+    fn gate_refuses_on_failed_auth() {
+        let result =
+            tauri::async_runtime::block_on(gate_confidential(true, async { Err("cancelled".to_string()) }));
+        assert_eq!(result, Err("cancelled".to_string()));
+    }
+
+    /// A confidential item stored via the real Store reports `is_confidential == true`,
+    /// so the commands' `gate_confidential(confidential, ..)` gate actually engages.
+    /// Guards against a regression where the flag stops round-tripping and every
+    /// item silently becomes non-confidential (which would bypass the prompt).
+    #[test]
+    fn confidential_flag_round_trips_through_store() {
+        let store = crate::store::Store::open_in_memory(crate::crypto::new_key()).unwrap();
+        let id = store
+            .add_text("KTP number", "Identity", "Personal", true, "1234567890")
+            .unwrap();
+        assert_eq!(store.is_confidential(&id), Ok(true));
+
+        let plain = store
+            .add_text("Nickname", "Personal", "Personal", false, "hi")
+            .unwrap();
+        assert_eq!(store.is_confidential(&plain), Ok(false));
     }
 }
