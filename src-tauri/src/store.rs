@@ -9,6 +9,9 @@ pub struct Store {
     conn: Connection,
     key: DataKey,
     blob_dir: PathBuf,
+    // Encrypted clipboard-history buffer, one file next to the DB. Kept off the
+    // webview's plaintext localStorage — it's the app's most sensitive data class.
+    clips_path: PathBuf,
 }
 
 impl Store {
@@ -16,27 +19,34 @@ impl Store {
         // Derive a unique temp dir so parallel tests don't collide.
         let blob_dir = std::env::temp_dir()
             .join(format!("qb-blobs-{}", uuid::Uuid::new_v4()));
+        // Keep the clips file inside the unique dir so parallel tests stay isolated.
+        let clips_path = blob_dir.join("clips.enc");
         Self::init(
             Connection::open_in_memory().map_err(|e| e.to_string())?,
             key,
             blob_dir,
+            clips_path,
         )
     }
 
     pub fn open(path: &str, key: DataKey) -> Result<Self, String> {
-        // Derive blob_dir as a sibling "blobs" directory next to the db file.
-        let blob_dir = Path::new(path)
+        // Derive blob_dir as a sibling "blobs" directory next to the db file, and the
+        // clips buffer as a sibling file in the same app-data dir.
+        let data_dir = Path::new(path)
             .parent()
             .unwrap_or_else(|| Path::new("."))
-            .join("blobs");
+            .to_path_buf();
+        let blob_dir = data_dir.join("blobs");
+        let clips_path = data_dir.join("clips.enc");
         Self::init(
             Connection::open(path).map_err(|e| e.to_string())?,
             key,
             blob_dir,
+            clips_path,
         )
     }
 
-    fn init(conn: Connection, key: DataKey, blob_dir: PathBuf) -> Result<Self, String> {
+    fn init(conn: Connection, key: DataKey, blob_dir: PathBuf, clips_path: PathBuf) -> Result<Self, String> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS items(
                id TEXT PRIMARY KEY, label TEXT, kind TEXT, category TEXT,
@@ -54,7 +64,30 @@ impl Store {
             conn.execute("ALTER TABLE items ADD COLUMN environment TEXT NOT NULL DEFAULT 'Personal'", [])
                 .map_err(|e| e.to_string())?;
         }
-        Ok(Self { conn, key, blob_dir })
+        Ok(Self { conn, key, blob_dir, clips_path })
+    }
+
+    /// Persist the clipboard-history buffer (a JSON array) encrypted under the DEK.
+    /// The whole buffer is re-encrypted with a fresh nonce on each save.
+    pub fn save_clips(&self, json: &str) -> Result<(), String> {
+        if let Some(parent) = self.clips_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let blob = encrypt(&self.key, json.as_bytes())?;
+        std::fs::write(&self.clips_path, blob).map_err(|e| e.to_string())
+    }
+
+    /// Load + decrypt the clipboard-history buffer. Returns `"[]"` when no file
+    /// exists yet (fresh install / history never enabled). A decrypt failure
+    /// (tampering / wrong key) surfaces as `Err` so callers can degrade to empty.
+    pub fn load_clips(&self) -> Result<String, String> {
+        let blob = match std::fs::read(&self.clips_path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok("[]".to_string()),
+            Err(e) => return Err(e.to_string()),
+        };
+        let pt = decrypt(&self.key, &blob)?;
+        String::from_utf8(pt).map_err(|e| e.to_string())
     }
 
     pub fn add_text(
@@ -389,6 +422,32 @@ mod tests {
         s.add_file("Logo", "Brand", "Personal", false, "logo.png", "image/png", b"PNG").unwrap();
         let items = s.list().unwrap();
         assert_eq!(items[0].mime.as_deref(), Some("image/png"));
+    }
+
+    #[test]
+    fn clips_round_trip_through_encrypted_file() {
+        let s = Store::open_in_memory(new_key()).unwrap();
+        let json = r#"[{"id":"a","kind":"text","value":"secret","label":"secret","ts":1}]"#;
+        s.save_clips(json).unwrap();
+        assert_eq!(s.load_clips().unwrap(), json);
+    }
+
+    #[test]
+    fn load_clips_defaults_to_empty_array_when_missing() {
+        let s = Store::open_in_memory(new_key()).unwrap();
+        assert_eq!(s.load_clips().unwrap(), "[]");
+    }
+
+    #[test]
+    fn tampered_clips_ciphertext_fails_to_decrypt() {
+        let s = Store::open_in_memory(new_key()).unwrap();
+        s.save_clips(r#"[{"id":"a"}]"#).unwrap();
+        // Flip a byte in the on-disk ciphertext; GCM auth must reject it.
+        let mut blob = std::fs::read(&s.clips_path).unwrap();
+        let n = blob.len() - 1;
+        blob[n] ^= 0xff;
+        std::fs::write(&s.clips_path, blob).unwrap();
+        assert!(s.load_clips().is_err());
     }
 
     #[test]

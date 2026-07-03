@@ -93,6 +93,19 @@ pub fn list_categories(store: State<Mutex<Store>>) -> Result<Vec<String>, String
     store.lock().unwrap().list_categories()
 }
 
+/// Persist the clipboard-history buffer, encrypted under the DEK. Callable from
+/// any window (writes originate from main/summon/tray).
+#[tauri::command]
+pub fn clip_history_save(store: State<Mutex<Store>>, json: String) -> Result<(), String> {
+    store.lock().unwrap().save_clips(&json)
+}
+
+/// Load + decrypt the clipboard-history buffer (JSON array; `"[]"` when absent).
+#[tauri::command]
+pub fn clip_history_load(store: State<Mutex<Store>>) -> Result<String, String> {
+    store.lock().unwrap().load_clips()
+}
+
 #[tauri::command]
 pub fn add_file_item(store: State<Mutex<Store>>, label: String, category: String,
                      environment: String, confidential: bool, src_path: String) -> Result<String, String> {
