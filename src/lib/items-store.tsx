@@ -4,10 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { makeTrailingDebounce, shouldReload } from "./board-sync";
 import { listCategories, listEnvironments, listItems } from "./ipc";
 import { useEnvironments } from "./environments";
 import { getSettings } from "./settings";
@@ -110,12 +113,23 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
+  // Coalesce refetch bursts (bulk delete, lane commit) into one refetch, and
+  // skip self-originated broadcasts — the emitting window already reloaded
+  // locally after its own mutation.
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
   useEffect(() => {
-    const un = listen("board:changed", () => void reload());
+    const label = getCurrentWebviewWindow().label;
+    const debouncedReload = makeTrailingDebounce(() => void reloadRef.current(), 80);
+    const un = listen<{ source?: string }>("board:changed", (e) => {
+      if (!shouldReload(e.payload, label)) return; // local mutation already handled
+      debouncedReload();
+    });
     return () => {
+      debouncedReload.cancel();
       void un.then((f) => f());
     };
-  }, [reload]);
+  }, []);
 
   const value = useMemo<ItemsState>(
     () => ({

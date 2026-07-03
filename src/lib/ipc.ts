@@ -1,11 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { Item } from "./types";
 
 const boardChanged = async <T>(operation: Promise<T>): Promise<T> => {
   const result = await operation;
   try {
-    await emit("board:changed");
+    // Tag the emit with the sender's window label so that window can skip the
+    // broadcast (it already applied the change locally) while others refetch.
+    await emit("board:changed", { source: getCurrentWebviewWindow().label });
   } catch {
     // A board mutation already succeeded; don't turn a UI refresh signal into a CRUD failure.
   }
