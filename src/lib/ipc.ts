@@ -52,3 +52,6 @@ export const deleteEnvironmentItems = (environment: string, reassignTo: string) 
 export const readImageAsDataUrl = (path: string) => invoke<string>("read_image_as_data_url", { path });
 export const setAutostart = (enabled: boolean) => invoke<void>("set_autostart", { enabled });
 export const getAutostart = () => invoke<boolean>("get_autostart");
+// Write/read a UTF-8 text file at a user-chosen (OS-dialog) path — backup export/import.
+export const saveTextFile = (path: string, contents: string) => invoke<void>("save_text_file", { path, contents });
+export const readTextFile = (path: string) => invoke<string>("read_text_file", { path });

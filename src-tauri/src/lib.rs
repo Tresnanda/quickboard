@@ -275,6 +275,8 @@ pub fn run() {
             commands::summon_paste_image_path,
             commands::accessibility_trusted,
             commands::open_accessibility_settings,
+            commands::save_text_file,
+            commands::read_text_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
