@@ -11,6 +11,9 @@
     "remotion:render:social": "remotion render src/remotion/index.tsx QuickboardSocial15 dist/videos/quickboard-social-15.mp4",
     "remotion:render:explainer": "remotion render src/remotion/index.tsx QuickboardExplainer30 dist/videos/quickboard-explainer-30.mp4",
     "remotion:render:hero": "remotion render src/remotion/index.tsx QuickboardHeroLoop dist/videos/quickboard-hero-loop.mp4",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -48,11 +51,13 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "autoprefixer": "10.5.0",
+    "jsdom": "29.1.1",
     "postcss": "8.5.15",
     "remotion": "4.0.482",
     "tailwindcss": "3.4.19",
     "tailwindcss-animate": "1.0.7",
     "typescript": "5.8.3",
-    "vite": "7.3.5"
+    "vite": "7.3.5",
+    "vitest": "4.1.9"
   }
 }
