@@ -177,9 +177,11 @@ export function Onboarding() {
             </motion.button>
           )}
 
-          <div className="relative z-10 flex min-h-[440px] w-full max-w-[520px] flex-col items-center justify-center px-8">
+          {/* pt reserves the Skip band, pb reserves the dots band — the beat column
+              scrolls inside this window instead of sliding under the bottom chrome */}
+          <div className="relative z-10 flex h-full min-h-0 w-full max-w-[520px] flex-col items-center overflow-y-auto px-8 pb-24 pt-16">
             <AnimatePresence mode="wait" custom={dir}>
-              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="flex w-full flex-col items-center text-center">
+              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="my-auto flex w-full flex-col items-center text-center">
                 {beat === 0 && <Hello onNext={() => go(1)} />}
                 {beat === 1 && <SaveBeat onSaved={(item) => { setSaved(item); void reload(); go(1); }} />}
                 {beat === 2 && <SummonBeat item={saved} onNext={() => go(1)} />}
@@ -522,8 +524,8 @@ function TrayGlyph({ shown, first }: { shown: boolean; first: { name: string; va
                     key={chip}
                     className="flex items-center gap-2 rounded-[9px] border border-black/[0.05] bg-white px-2 py-1.5"
                     style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}
-                    initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0.01px)" }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.42, ease: OUT, delay: 0.18 + (li * 2 + ci) * 0.07 }}
                   >
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded-[7px] bg-[#efe9fb] text-[#6b4ea8]">
