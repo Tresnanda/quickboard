@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ShieldCheck, ClipboardCopy, Trash2, Check, RefreshCw, ArrowUpCircle } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ShieldCheck, Trash2, Check, RefreshCw, ArrowUpCircle, Download, Upload } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
+import { save, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { SlotText } from "slot-text/react";
 import { checkForUpdate, installUpdate, useUpdater } from "../lib/updater";
 import { useItems } from "../lib/items-store";
@@ -12,7 +14,8 @@ import { ProfileEditor } from "../components/ProfileEditor";
 import { Avatar } from "../components/Avatar";
 import { Select } from "../components/Select";
 import { clearImageCache } from "../lib/image-cache";
-import { deleteItem, getAutostart, getTextValue, setAutostart } from "../lib/ipc";
+import { addText, deleteItem, getAutostart, getTextValue, readTextFile, saveTextFile, setAutostart } from "../lib/ipc";
+import { isDuplicate, parseBackup, serializeBackup, type ExportedItem } from "../lib/backup";
 import { cn } from "../lib/utils";
 
 export function Settings() {
@@ -24,6 +27,12 @@ export function Settings() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [autostart, setAutostartState] = useState(false);
+  // Export/import are their own little flows so they can own an inline success
+  // moment (an animated check + a count-up) without blocking the rest of the page.
+  const [exportPhase, setExportPhase] = useState<"idle" | "working" | "done">("idle");
+  const [exportedCount, setExportedCount] = useState(0);
+  const [importPhase, setImportPhase] = useState<"idle" | "working" | "done">("idle");
+  const [importedCount, setImportedCount] = useState(0);
 
   useEffect(() => {
     void getAutostart().then(setAutostartState).catch(() => {});
@@ -48,29 +57,116 @@ export function Settings() {
   );
 
   async function exportBackup() {
-    if (busy) return;
-    setBusy(true);
+    if (busy || exportPhase === "working") return;
+    let path: string | null;
     try {
-      const exported = await Promise.all(
+      path = await save({ defaultPath: "quickboard-backup.json", filters: [{ name: "JSON", extensions: ["json"] }] });
+    } catch {
+      toast({ message: "Couldn't open the save dialog", tone: "rose" });
+      return;
+    }
+    if (!path) return; // user cancelled — stay silent
+    setExportPhase("working");
+    try {
+      const exported: ExportedItem[] = await Promise.all(
         items.map(async (it) => {
           let value: string | null = null;
           if (it.kind === "Text" && !it.confidential) {
             try {
               value = await getTextValue(it.id);
             } catch {
-              /* skip */
+              /* skip — this item exports as metadata only */
             }
           }
           return { label: it.label, kind: it.kind, category: it.category, environment: it.environment, confidential: it.confidential, value, created_at: it.created_at };
         }),
       );
-      const json = JSON.stringify({ exportedAt: new Date().toISOString(), count: exported.length, items: exported }, null, 2);
-      await navigator.clipboard.writeText(json);
-      toast({ message: `Backup of ${exported.length} items copied`, icon: <Check size={14} strokeWidth={2.6} />, tone: "green" });
+      const included = exported.filter((e) => e.value !== null).length;
+      let appVersion: string | undefined;
+      try {
+        appVersion = await getVersion();
+      } catch {
+        /* version is optional metadata */
+      }
+      await saveTextFile(path, serializeBackup(exported, appVersion));
+      setExportedCount(included);
+      setExportPhase("done");
+      window.setTimeout(() => setExportPhase("idle"), 2600);
+      toast({ message: `Exported ${included} text ${included === 1 ? "item" : "items"}`, icon: <Check size={14} strokeWidth={2.6} />, tone: "green" });
     } catch {
-      toast({ message: "Couldn't copy backup", icon: <ClipboardCopy size={14} />, tone: "rose" });
-    } finally {
-      setBusy(false);
+      setExportPhase("idle");
+      toast({ message: "Couldn't save backup", tone: "rose" });
+    }
+  }
+
+  async function importBackup() {
+    if (busy || importPhase === "working") return;
+    let selected: string | string[] | null;
+    try {
+      selected = await openFileDialog({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
+    } catch {
+      toast({ message: "Couldn't open the file picker", tone: "rose" });
+      return;
+    }
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    if (!path) return; // user cancelled
+
+    let importable: ReturnType<typeof parseBackup>["items"];
+    let skipped: number;
+    try {
+      const json = await readTextFile(path);
+      ({ items: importable, skipped } = parseBackup(json));
+    } catch (e) {
+      toast({ message: e instanceof Error ? e.message : "Couldn't read that backup file", tone: "rose" });
+      return;
+    }
+
+    if (importable.length === 0) {
+      toast({
+        message: skipped > 0 ? `Nothing to import — ${skipped} ${skipped === 1 ? "entry is a file or confidential item" : "entries are files or confidential items"}` : "This backup has no text items",
+        tone: "rose",
+      });
+      return;
+    }
+
+    const ok = await confirm({
+      title: "Import backup?",
+      message: `Import ${importable.length} text ${importable.length === 1 ? "item" : "items"}?${skipped > 0 ? ` ${skipped} ${skipped === 1 ? "entry" : "entries"} will be skipped (files and confidential items).` : ""}`,
+      confirmLabel: "Import",
+    });
+    if (!ok) return;
+
+    setImportPhase("working");
+    try {
+      // De-dupe against the existing board and against rows already added in this
+      // batch (the export carries no ids, so we match on label+category+env+kind).
+      const seen = items.map((i) => ({ label: i.label, category: i.category, environment: i.environment, kind: i.kind }));
+      let imported = 0;
+      let duplicates = 0;
+      for (const row of importable) {
+        if (isDuplicate(row, seen)) {
+          duplicates += 1;
+          continue;
+        }
+        try {
+          await addText(row.label, row.category, row.environment, row.confidential, row.value);
+          seen.push({ label: row.label, category: row.category, environment: row.environment, kind: "Text" });
+          imported += 1;
+        } catch {
+          /* best-effort — a single failed row shouldn't abort the whole import */
+        }
+      }
+      await reload();
+      setImportedCount(imported);
+      setImportPhase("done");
+      window.setTimeout(() => setImportPhase("idle"), 2600);
+      const parts = [`Imported ${imported} text ${imported === 1 ? "item" : "items"}`];
+      if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped`);
+      if (skipped > 0) parts.push(`${skipped} not importable`);
+      toast({ message: parts.join(" · "), icon: <Check size={14} strokeWidth={2.6} />, tone: "green" });
+    } catch {
+      setImportPhase("idle");
+      toast({ message: "Couldn't finish importing", tone: "rose" });
     }
   }
 
@@ -186,10 +282,27 @@ export function Settings() {
         </Section>
 
         <Section title="Data & backup">
-          <Row label="Export backup" hint="Copy a JSON of everything to your clipboard.">
-            <button type="button" onClick={() => void exportBackup()} disabled={busy} className="qb-press flex h-[32px] items-center gap-1.5 rounded-[9px] border border-[var(--border)] bg-white px-3 text-[12px] font-semibold text-[var(--ink)] disabled:opacity-50">
-              <ClipboardCopy size={14} /> Copy
-            </button>
+          <Row label="Export text items" hint="Save a JSON file. Files and confidential items aren't included.">
+            <BackupButton
+              phase={exportPhase}
+              count={exportedCount}
+              idleIcon={<Download size={14} />}
+              idleLabel="Export…"
+              doneVerb="Exported"
+              onClick={() => void exportBackup()}
+              disabled={busy}
+            />
+          </Row>
+          <Row label="Import backup" hint="Recreate text items from a backup file. Existing duplicates are skipped.">
+            <BackupButton
+              phase={importPhase}
+              count={importedCount}
+              idleIcon={<Upload size={14} />}
+              idleLabel="Import…"
+              doneVerb="Imported"
+              onClick={() => void importBackup()}
+              disabled={busy}
+            />
           </Row>
           <Row label="Clear all data" hint="Permanently delete every item.">
             <button type="button" onClick={() => void clearAll()} disabled={busy || items.length === 0} className="qb-press flex h-[32px] items-center gap-1.5 rounded-[9px] border border-[#f0d9dd] bg-[#fbf2f3] px-3 text-[12px] font-semibold text-[#b4424f] disabled:opacity-40">
@@ -256,6 +369,79 @@ function UpdatesSection() {
         </div>
       )}
     </Section>
+  );
+}
+
+// A single backup action (export or import) that owns its own inline success
+// moment: an animated check that springs in, with a count-up of how many items
+// moved. Motion is off the critical path — the file work already finished — and
+// collapses to instant when reduced motion is on.
+function BackupButton({
+  phase,
+  count,
+  idleIcon,
+  idleLabel,
+  doneVerb,
+  onClick,
+  disabled,
+}: {
+  phase: "idle" | "working" | "done";
+  count: number;
+  idleIcon: ReactNode;
+  idleLabel: string;
+  doneVerb: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const reduce = useReducedMotion();
+  const done = phase === "done";
+  // Crossfade + blur between phases (never a bare crossfade); reduced motion → snap.
+  const swap = reduce
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, filter: "blur(4px)", y: 3 },
+        animate: { opacity: 1, filter: "blur(0.01px)", y: 0 },
+        exit: { opacity: 0, filter: "blur(4px)", y: -3 },
+        transition: { duration: 0.18, ease: [0.2, 0, 0, 1] as const },
+      };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || phase === "working"}
+      className={cn(
+        "qb-press relative flex h-[32px] min-w-[112px] items-center justify-center gap-1.5 overflow-hidden rounded-[9px] border px-3 text-[12px] font-semibold transition-colors duration-300 disabled:opacity-50",
+        done ? "border-[#cfe6d8] bg-[#e9f4ee] text-[#3f7a57]" : "border-[var(--border)] bg-white text-[var(--ink)]",
+      )}
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {phase === "working" ? (
+          <motion.span key="working" {...swap} className="flex items-center gap-1.5">
+            <RefreshCw size={13} className={reduce ? "" : "animate-spin"} /> Working…
+          </motion.span>
+        ) : done ? (
+          <motion.span key="done" {...swap} className="flex items-center gap-1.5">
+            <motion.span
+              initial={reduce ? { opacity: 0 } : { scale: 0.25, opacity: 0, filter: "blur(4px)" }}
+              animate={reduce ? { opacity: 1 } : { scale: 1, opacity: 1, filter: "blur(0.01px)" }}
+              transition={reduce ? { duration: 0 } : { type: "spring", duration: 0.45, bounce: 0.4 }}
+              className="flex"
+            >
+              <Check size={14} strokeWidth={2.6} />
+            </motion.span>
+            <span>{doneVerb}</span>
+            <span className="tabular tabular-nums">
+              <SlotText text={String(count)} />
+            </span>
+          </motion.span>
+        ) : (
+          <motion.span key="idle" {...swap} className="flex items-center gap-1.5">
+            {idleIcon} {idleLabel}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </button>
   );
 }
 

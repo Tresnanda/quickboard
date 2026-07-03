@@ -918,6 +918,19 @@ pub fn open_accessibility_settings() {
     }
 }
 
+/// Write a UTF-8 text file to a user-chosen path (backup export).
+/// Path comes from the OS save dialog — same trust level as other path-taking commands.
+#[tauri::command]
+pub fn save_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| e.to_string())
+}
+
+/// Read a UTF-8 text file from a user-chosen path (backup import).
+#[tauri::command]
+pub fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -930,6 +943,17 @@ mod tests {
         let d = std::env::temp_dir().join(format!("qb-cmd-test-{tag}-{}", now_nanos()));
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn save_and_read_text_file_round_trip() {
+        let root = scratch("txtfile");
+        let p = root.join("quickboard-backup.json");
+        let path = p.to_string_lossy().to_string();
+        let contents = "{\"version\":1,\"items\":[]}";
+        save_text_file(path.clone(), contents.to_string()).unwrap();
+        assert_eq!(read_text_file(path).unwrap(), contents);
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

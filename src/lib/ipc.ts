@@ -62,3 +62,6 @@ export const getAutostart = () => invoke<boolean>("get_autostart");
 // (never plaintext localStorage). Buffer is a JSON array of ClipEntry.
 export const clipHistorySave = (json: string) => invoke<void>("clip_history_save", { json });
 export const clipHistoryLoad = () => invoke<string>("clip_history_load");
+// Write/read a UTF-8 text file at a user-chosen (OS-dialog) path — backup export/import.
+export const saveTextFile = (path: string, contents: string) => invoke<void>("save_text_file", { path, contents });
+export const readTextFile = (path: string) => invoke<string>("read_text_file", { path });
