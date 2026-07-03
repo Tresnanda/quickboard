@@ -177,11 +177,13 @@ export function Onboarding() {
             </motion.button>
           )}
 
-          {/* pt reserves the Skip band, pb reserves the dots band — the beat column
-              scrolls inside this window instead of sliding under the bottom chrome */}
-          <div className="relative z-10 flex h-full min-h-0 w-full max-w-[520px] flex-col items-center overflow-y-auto px-8 pb-24 pt-16">
+          {/* The beat column scrolls inside this window instead of sliding under the
+              bottom chrome. The clearance bands (pt = Skip, pb = dots) live on the
+              CONTENT, not the scroller — WKWebView drops a scroll container's own
+              bottom padding once content overflows. */}
+          <div className="relative z-10 flex h-full min-h-0 w-full max-w-[520px] flex-col items-center overflow-y-auto px-8">
             <AnimatePresence mode="wait" custom={dir}>
-              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="my-auto flex w-full flex-col items-center text-center">
+              <motion.div key={beat} custom={dir} variants={container} initial="enter" animate="center" exit="exit" className="my-auto flex w-full flex-col items-center pb-24 pt-16 text-center">
                 {beat === 0 && <Hello onNext={() => go(1)} />}
                 {beat === 1 && <SaveBeat onSaved={(item) => { setSaved(item); void reload(); go(1); }} />}
                 {beat === 2 && <SummonBeat item={saved} onNext={() => go(1)} />}
