@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "framer-motion";
 import { getTextValue } from "./ipc";
 import { getSettings } from "./settings";
+import { useToast } from "../components/Toast";
+import { AUTH_FAIL_MESSAGE, authFailIcon, isAuthCancel } from "./confidential-errors";
 
 /**
  * Touch-ID-gated in-place reveal for a confidential item.
@@ -14,6 +17,8 @@ export function useReveal(itemId: string) {
   const [value, setValue] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const timer = useRef<number | null>(null);
+  const toast = useToast();
+  const reduce = useReducedMotion();
 
   function clearTimer() {
     if (timer.current !== null) {
@@ -56,8 +61,12 @@ export function useReveal(itemId: string) {
         setValue(null);
         timer.current = null;
       }, getSettings().autoHideSeconds * 1000);
-    } catch {
-      /* cancelled or failed — stay hidden */
+    } catch (err) {
+      // Either way the secret stays hidden. A deliberate cancel is silent; a
+      // real failure says so, so the user knows it wasn't a no-op.
+      if (!isAuthCancel(err)) {
+        toast({ message: AUTH_FAIL_MESSAGE, icon: authFailIcon(!!reduce), tone: "rose" });
+      }
     } finally {
       setBusy(false);
     }

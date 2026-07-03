@@ -7,6 +7,7 @@ import { Check, ChevronLeft, ClipboardList, CornerDownLeft, Download, Image as I
 import { useItems } from "../lib/items-store";
 import { addFile, addText, getImageDataUrl, getTextValue, summonPasteImage, summonPasteImagePath } from "../lib/ipc";
 import { addToTray } from "../lib/tray";
+import { AUTH_FAIL_MESSAGE, isAuthCancel } from "../lib/confidential-errors";
 import { clipPreview, filterClips, suppressClipboardCapture, suppressImageCapture, useClipboard, type ClipEntry } from "../lib/clipboard";
 import { isDraggingOut } from "../lib/drag";
 import { GRAB_TRANSITION, RECOIL_TRANSITION, useDragOut } from "../lib/use-drag-out";
@@ -50,6 +51,10 @@ export function SummonPanel() {
   // opens under a stationary cursor, and not when rows scroll under it during keyboard nav
   const moved = useRef(false);
   const lastPos = useRef({ x: -1, y: -1 });
+  // While a Touch ID / paste round-trip is in flight the system prompt steals focus
+  // and fires window blur — suppress the click-away dismiss so the panel survives it.
+  // Must be a ref: the blur listener below closes over its initial value only.
+  const authBusyRef = useRef(false);
 
   useEffect(() => {
     const focus = () => requestAnimationFrame(() => inputRef.current?.focus());
@@ -75,7 +80,10 @@ export function SummonPanel() {
 
   // Spotlight-style: dismiss when focus leaves the panel (click away / switch app).
   useEffect(() => {
-    const onBlur = () => void invoke("summon_hide");
+    const onBlur = () => {
+      if (authBusyRef.current) return; // Touch ID prompt owns focus — stay open
+      void invoke("summon_hide");
+    };
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   }, []);
@@ -182,6 +190,7 @@ export function SummonPanel() {
     const result = results[idx];
     if (!result || busy || (result.kind === "item" && result.item.kind === "File")) return;
     setBusy(true);
+    authBusyRef.current = true; // getTextValue can raise Touch ID for confidential items
     try {
       const value = result.kind === "clip" ? result.clip.value ?? "" : await getTextValue(result.item.id);
       await navigator.clipboard.writeText(value);
@@ -190,6 +199,7 @@ export function SummonPanel() {
     } catch {
       showFlash("Couldn't copy");
     } finally {
+      authBusyRef.current = false;
       setBusy(false);
     }
   }
@@ -228,6 +238,7 @@ export function SummonPanel() {
     if (it.kind === "File") {
       if (contentType(it) === "image") {
         setBusy(true);
+        authBusyRef.current = true; // summon_paste_image can raise Touch ID for confidential images
         sfx.paste();
         try {
           await summonPasteImage(it.id);
@@ -237,6 +248,7 @@ export function SummonPanel() {
           sfx.move();
           showFlash("Added to tray");
         } finally {
+          authBusyRef.current = false;
           setBusy(false);
         }
         return;
@@ -249,14 +261,24 @@ export function SummonPanel() {
       return;
     }
     setBusy(true);
+    authBusyRef.current = true; // get_text_value can raise Touch ID for confidential items
     sfx.paste();
     try {
       const value = await getTextValue(it.id);
       suppressClipboardCapture(value);
       await navigator.clipboard.writeText(value);
       await invoke("summon_paste");
-    } catch {
-      await invoke("summon_hide");
+    } catch (err) {
+      // Deliberate Touch ID cancel: dismiss the panel as before. A real failure:
+      // keep the panel up and flash why, so the user can try the unlock again.
+      if (isAuthCancel(err)) {
+        await invoke("summon_hide");
+      } else {
+        showFlash(AUTH_FAIL_MESSAGE);
+      }
+    } finally {
+      authBusyRef.current = false;
+      setBusy(false);
     }
   }
 
