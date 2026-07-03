@@ -196,23 +196,30 @@ fn paste_at_cursor(app: &tauri::AppHandle) -> Result<(), String> {
     app.run_on_main_thread(move || {
         let result = (|| {
             crate::summon::reactivate_prev();
-            // Wait until the remembered app is actually frontmost before synthesizing
-            // ⌘V — activation latency isn't bounded by a fixed sleep (Spaces switches,
-            // heavy apps). Poll in short steps with a hard cap so a stuck activation
-            // can't hang the paste; if no PID was captured, fall back to the old delay.
-            match crate::summon::prev_pid() {
-                Some(target) => {
-                    for _ in 0..20 {
-                        if crate::summon::frontmost_pid() == Some(target) {
-                            break;
-                        }
-                        std::thread::sleep(std::time::Duration::from_millis(20));
+            // Two waits are folded together here, and BOTH matter:
+            //
+            // 1. App activation: if quickboard somehow became the active app, wait
+            //    (poll, hard-capped) until the remembered app is frontmost again —
+            //    a fixed sleep can't bound Spaces switches or heavy apps.
+            // 2. Key-window handoff: the summon panel is a NON-ACTIVATING NSPanel,
+            //    so the target app usually stays frontmost the entire time — the
+            //    poll succeeds instantly — but the panel still holds KEY (keyboard)
+            //    status until it finishes hiding. AppKit exposes no cheap signal for
+            //    that handoff, so a minimum settle delay is load-bearing: without it
+            //    the synthetic ⌘V fires while the panel still owns the keyboard and
+            //    the paste is lost. 140ms is the empirically reliable floor.
+            let start = std::time::Instant::now();
+            if let Some(target) = crate::summon::prev_pid() {
+                for _ in 0..20 {
+                    if crate::summon::frontmost_pid() == Some(target) {
+                        break;
                     }
-                    // one settle tick after the app reports frontmost, so its key
-                    // window is ready to receive the synthetic keystroke
-                    std::thread::sleep(std::time::Duration::from_millis(30));
+                    std::thread::sleep(std::time::Duration::from_millis(20));
                 }
-                None => std::thread::sleep(std::time::Duration::from_millis(140)),
+            }
+            const MIN_SETTLE: std::time::Duration = std::time::Duration::from_millis(140);
+            if let Some(rest) = MIN_SETTLE.checked_sub(start.elapsed()) {
+                std::thread::sleep(rest);
             }
 
             use enigo::{Direction, Enigo, Key, Keyboard, Settings};
