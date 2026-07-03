@@ -37,7 +37,31 @@ pub fn load_or_create_dek(service: &str) -> Result<DataKey, String> {
 /// real OS backends persist by service/account, so production callers see the
 /// same idempotent behaviour through [`load_or_create_dek`].
 fn load_or_create_in(entry: &Entry) -> Result<DataKey, String> {
-    match entry.get_password() {
+    match resolve_dek(entry.get_password())? {
+        Some(k) => Ok(k),
+        None => {
+            let k = new_key();
+            entry
+                .set_password(&STANDARD.encode(k))
+                .map_err(|e| e.to_string())?;
+            Ok(k)
+        }
+    }
+}
+
+/// Interpret a keyring read into a non-destructive decision, performing no
+/// writes of its own.
+///
+/// - `Ok(Some(key))` — a valid 32-byte DEK was decoded; use it as-is.
+/// - `Ok(None)` — the keyring reports genuinely no stored entry
+///   ([`keyring::Error::NoEntry`]); the caller may mint and persist a fresh key.
+/// - `Err(_)` — the read failed for any other reason (locked keychain, denied
+///   access prompt, transient platform failure) or the stored value is
+///   malformed. The caller must **not** mint a new key: an existing DEK may
+///   simply be unreadable right now, and overwriting it would permanently
+///   brick the vault. The error string never contains key material.
+fn resolve_dek(read: Result<String, keyring::Error>) -> Result<Option<DataKey>, String> {
+    match read {
         Ok(b64) => {
             let bytes = STANDARD.decode(b64).map_err(|e| e.to_string())?;
             if bytes.len() != 32 {
@@ -45,15 +69,10 @@ fn load_or_create_in(entry: &Entry) -> Result<DataKey, String> {
             }
             let mut k = [0u8; 32];
             k.copy_from_slice(&bytes);
-            Ok(k)
+            Ok(Some(k))
         }
-        Err(_) => {
-            let k = new_key();
-            entry
-                .set_password(&STANDARD.encode(k))
-                .map_err(|e| e.to_string())?;
-            Ok(k)
-        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("keychain read failed: {e}")),
     }
 }
 
@@ -103,6 +122,24 @@ mod tests {
         entry.set_password(&STANDARD.encode([7u8; 16])).unwrap();
         assert!(load_or_create_in(&entry).is_err());
         entry.delete_credential().ok();
+    }
+
+    #[test]
+    fn no_entry_read_signals_mint() {
+        // A genuine "no stored credential" is the ONLY case that permits
+        // minting a fresh key: resolve_dek returns Ok(None).
+        assert_eq!(resolve_dek(Err(keyring::Error::NoEntry)).unwrap(), None);
+    }
+
+    #[test]
+    fn non_noentry_error_is_not_swallowed() {
+        // Any read failure other than NoEntry must surface as Err so the caller
+        // aborts instead of overwriting an existing, merely-unreadable DEK.
+        // NoStorageAccess stands in for a locked keychain / denied prompt.
+        let err = resolve_dek(Err(keyring::Error::NoStorageAccess(Box::new(
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "locked"),
+        ))));
+        assert!(err.is_err());
     }
 
     /// Round-trips the public API against the REAL OS keychain. Ignored so
